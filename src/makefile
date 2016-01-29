@@ -1,0 +1,111 @@
+
+# compiler
+CXX :=g++ -Wall -w -O3 -msse2 -fPIC -ggdb -pthread -std=c++11
+CC :=gcc -Wall -w -O3 -msse2 -fPIC -ggdb -pthread -std=c++11
+
+#CXX :=g++ -fPIC 
+#CC :=gcc -fPIC 
+
+#shared library
+SFLAG := -fPIC -shared
+
+###### target and sources
+# sources
+
+CAFFE_DIR = ../src/API_caffe/v1.0.0
+CAFFE_INC = -I$(CAFFE_DIR) -I$(CAFFE_DIR)/include
+CAFFE_SRC = $(CAFFE_DIR)/API_caffe.cpp
+CAFFE_LIB = -L$(CAFFE_DIR)/lib
+
+COMMEN_DIR = ../src/API_commen
+COMMEN_INC = -I$(COMMEN_DIR)
+COMMEN_SRC = $(COMMEN_DIR)/API_commen.cpp
+
+XML_DIR = ../src/API_xml
+XML_INC = -I$(XML_DIR)
+XML_SRC = $(XML_DIR)/tinyxml2.cpp $(XML_DIR)/API_xml.cpp
+
+PLOG_DIR = ../src/API_plog
+PLOG_INC = -I$(PLOG_DIR)
+
+SD_DIR = ../src/API_similardetect/v1.0.0
+SD_INC = -I$(SD_DIR)/include
+SD_LIB = -L$(SD_DIR)/lib
+
+LINEARSVM_DIR = ../src/API_linearsvm
+LINEARSVM_INC = -I$(LINEARSVM_DIR)
+LINEARSVM_SRC = $(LINEARSVM_DIR)/tron.cpp $(LINEARSVM_DIR)/linear.cpp $(LINEARSVM_DIR)/API_linearsvm.cpp
+
+MAINBOBY_DIR = ../src/API_mainboby/v1.0.0
+MAINBOBY_INC = -I$(MAINBOBY_DIR) -I$(MAINBOBY_DIR)/BING -I$(MAINBOBY_DIR)/CLD -I$(MAINBOBY_DIR)/EHD 
+MAINBOBY_SRC =  $(MAINBOBY_DIR)/BING/CmFile.cpp \
+		$(MAINBOBY_DIR)/BING/CmShow.cpp \
+		$(MAINBOBY_DIR)/BING/DataSetVOC.cpp \
+		$(MAINBOBY_DIR)/BING/FilterTIG.cpp \
+		$(MAINBOBY_DIR)/BING/kyheader.cpp \
+		$(MAINBOBY_DIR)/BING/Objectness_predict.cpp \
+		$(MAINBOBY_DIR)/CLD/ColorLayout.cpp \
+		$(MAINBOBY_DIR)/EHD/EdgeHist.cpp \
+		$(MAINBOBY_DIR)/API_mainboby.cpp
+
+# include && lib
+INCLUDE = -I../include -I../input/include -I/usr/local/include/opencv -I/usr/local/include/opencv2 -I/usr/local/include -I/usr/local/cuda-6.5/include
+LIBARAY = -L../lib -L../input/lib -L/usr/local/lib -L/usr/local/cuda/lib64 -L/usr/lib
+LIBARAY += $(CAFFE_LIB) $(SD_LIB)
+
+# flags
+CFLAGS =  -fopenmp  -DHAVE_JPEG -DHAVE_PNG
+CXXFLAGS = -fopenmp  -DHAVE_JPEG -DHAVE_PNG \
+	$(CAFFE_INC) $(COMMEN_INC) $(XML_INC) $(PLOG_INC) $(SD_INC) $(LINEARSVM_INC) $(MAINBOBY_INC) $(INCLUDE)
+
+LDFLAGS  = -lm -lpthread -lopencv_core -lopencv_highgui -lopencv_imgproc -lopencv_ml
+LDFLAGS  += -lcublas_device -lcublas -lcudadevrt -lcudart  -lcufft -lcufftw -lculibos -lcurand -lcusparse -lnppc -lnppi -lnpps
+LDFLAGS  += -ldl -lrt -ljpeg -lpng  -lz -lcurl -lstdc++ -lglog
+LDFLAGS  += -lSD_global -lcaffe -lopenblas
+
+SRCS = $(COMMEN_SRC) $(XML_SRC) $(CAFFE_SRC) $(LINEARSVM_SRC) $(MAINBOBY_SRC) 
+OBJS = $(SRCS:%.cpp=%.o)
+OBJECTS := $(OBJS)
+
+# BIN && LIB
+BIN = ../bin
+LIB = ../lib
+
+###### generation rules
+#.SUFFIXES: .cpp .c .o .so .a .d
+.c.o:
+	@echo ----------------------------------------------
+	$(CC) $(CFLAGS) -c $< -o $@
+	@echo ----------------------------------------------
+
+.cpp.o:
+	@echo ----------------------------------------------
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+	@echo ----------------------------------------------
+
+
+###### main
+#.PHONY : all 
+all: lib Demo_mainboby
+
+#deps: $(addprefix $(OBJSPATH),$(DEPS))
+Demo_mainboby:$(BIN) $(LIB) $(OBJECTS) Demo_mainboby.cpp
+	@echo ----------------------------------------------
+	$(CXX) $(CXXFLAGS) Demo_mainboby.cpp  -o $(BIN)/Demo_mainboby -lmainboby_1.0.0 $(LIBARAY) $(LDFLAGS) 
+	@echo ----------------------------------------------
+
+lib: $(LIB) $(OBJECTS)
+	@echo ----------------------------------------------
+	$(CXX) $(CXXFLAGS) -shared -o -fPIC -o $(LIB)/libmainboby_1.0.0.so $(OBJECTS) $(LIBARAY) $(LDFLAGS)
+	@echo ----------------------------------------------
+
+clean:
+	rm -f $(OBJECTS)
+	rm -f $(TARGET)
+	rm $(LIB)/libmainboby_1.0.0.so
+	rm -f *.o 
+	rm $(BIN)/Demo_mainboby
+
+rebuild: clean all
+install:
+	install -T $(TARGET) $(INSTALL_PATH)/bin/$(TARGET)

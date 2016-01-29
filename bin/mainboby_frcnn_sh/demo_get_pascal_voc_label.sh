@@ -1,0 +1,124 @@
+
+#Label
+a=(food.bread
+food.candy
+food.coffee
+food.cookie
+food.crab
+food.diningtable.diningtable
+food.dumpling
+food.food.barbecue
+food.food.cake
+food.food.cook
+food.food.food
+food.food.fruit
+food.food.hotpot
+food.food.icecream
+food.hamburger
+food.pasta
+food.pizza
+food.rice
+food.steak
+food.sushi
+goods.airplane.airplane
+goods.bag.bag
+goods.bangle
+goods.bottle.bottle
+goods.bracelet
+goods.camera.camera
+goods.car.bicycle
+goods.car.bus
+goods.car.car
+goods.car.motorbike
+goods.car.train
+goods.chair.chair
+goods.clothes.clothes
+goods.drawbar
+goods.goods.cosmetics
+goods.goods.flower
+goods.goods.glass
+goods.goods.goods
+goods.goods.jewelry
+goods.goods.manicure
+goods.goods.watch
+goods.guitar
+goods.hat
+goods.laptop
+goods.lipstick.lipstick
+goods.pendant
+goods.phone
+goods.pottedplant.pottedplant
+goods.puppet
+goods.ring
+goods.ship.ship
+goods.shoe.shoe
+goods.sofa.sofa
+goods.tvmonitor.tvmonitor
+other
+other.2dcode.2dcode
+other.sticker.sticker
+other.text.text
+people.eye.eye
+people.friend.friend
+people.hair.hair
+people.kid.kid
+people.lip.lip
+people.people.people
+people.self.female
+people.self.male
+people.street.street
+pet.alpaca
+pet.bird.bird
+pet.cat.cat
+pet.cow.cow
+pet.dog.dog
+pet.horse.horse
+pet.pet.pet
+pet.rabbit
+pet.sheep.sheep
+scene.clothingshop
+scene.courtyard
+scene.desert
+scene.forest
+scene.handdrawn.color
+scene.handdrawn.whiteblack
+scene.highway
+scene.mountain
+scene.scene.grasslands
+scene.scene.house
+scene.scene.scene
+scene.scene.sky
+scene.scene.supermarket
+scene.sea
+scene.street
+scene.tallbuilding)
+
+for((i=0;i<92;i+=10))
+ do
+  b1=${a[$i]}
+  c1=i+1
+  b2=${a[$c1]}
+  c2=i+2
+  b3=${a[$c2]}
+  c3=i+3
+  b4=${a[$c3]}
+  c4=i+4
+  b5=${a[$c4]}
+  c5=i+5
+  b6=${a[$c5]}
+  c6=i+6
+  b7=${a[$c6]}
+  c7=i+7
+  b8=${a[$c7]}
+  c8=i+8
+  b9=${a[$c8]}
+  c9=i+9
+  b10=${a[$c9]}
+  echo "'"$b1"'," "'"$b2"'," "'"$b3"'," "'"$b4"'," "'"$b5"'," "'"$b6"'," "'"$b7"'," "'"$b8"'," "'"$b9"'," "'"$b10"',"
+
+done
+
+
+
+
+

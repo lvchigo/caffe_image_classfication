@@ -1,0 +1,7 @@
+
+/*****fast-rcnn*****/
+
+1.use caffe-fast-rcnn:https://github.com/rbgirshick/caffe-fast-rcnn/tree/fast-rcnn
+
+2.use fast rcnn test:https://github.com/WilsonWangTHU/clothesDetection
+see:rcnn-test

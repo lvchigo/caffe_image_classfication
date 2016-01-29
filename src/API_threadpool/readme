@@ -1,0 +1,9 @@
+%**************threadpool****************************%
+引擎集成及静态库调用需注意：
+1、线程池，使用时加入include即可；
+Ubuntu:MY_LIB += -lboost_system -lboost_thread
+centos:MY_LIB += -lboost_system -lboost_thread-mt
+版本信息
+MD5：
+
+%*********************************************************%

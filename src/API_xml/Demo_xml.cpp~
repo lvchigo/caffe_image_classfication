@@ -1,0 +1,37 @@
+#pragma once
+#include <string>
+#include <API_xml.h>
+
+using namespace std;
+
+int main(int argc, char* argv[])
+
+{
+
+    CXMLConfig xmlConfig("..""Debug""XPathConfig.xml");
+
+    string strIP = xmlConfig.getXmlString("/main/IP");
+
+    int iPort = xmlConfig.getXmlInt("/main/Port");
+
+    cout<<"IP = "<<strIP.c_str()<<" Port = "<<iPort<<endl;
+
+    strIP = "127.1.1.1";
+
+    iPort = 81;
+
+    xmlConfig.writeXmlString(strIP,"/main/IP");
+
+    xmlConfig.writeXmlInt(iPort,"/main/Port");
+
+    if(xmlConfig.saveConfigFile())
+
+    {
+
+       cout<<"Save Config file success!"<<endl;
+
+    }
+
+    return 0;
+
+}
