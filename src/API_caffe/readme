@@ -1,0 +1,4 @@
+v1.0.0:caffe
+v1.0.0_DRN:caffe for msdrn
+v1.1.0:caffe for fast rcnn
+v1.2.0:caffe for faster rcnn

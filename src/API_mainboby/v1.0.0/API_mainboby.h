@@ -1,4 +1,27 @@
-#pragma once
+/*
+ * =====================================================================================
+ *
+ *       filename:  API_mutilabel.h
+ *
+ *    description:  mutilabel interface
+ *
+ *        version:  1.0
+ *        created:  2016-03-08
+ *       revision:  none
+ *       compiler:  g++
+ *
+ *         author:  xiaogao
+ *        company:  in66.com
+ *
+ *      copyright:  2016 itugo Inc. All Rights Reserved.
+ *      
+ * =====================================================================================
+ */
+
+
+#ifndef _API_MUTILABEL_H_
+#define _API_MUTILABEL_H_
+
 #include <vector>
 #include <opencv/cv.h>
 
@@ -6,10 +29,15 @@
 #include "API_caffe.h"
 #include "API_linearsvm.h"
 
-#include "kyheader.h"
+//BING
+//#include "kyheader.h"
+//#include "Objectness_predict.h"
+//#include "ValStructVec.h"
+//#include "CmShow.h"
+//BINGpp
+#include "stdafx.h"
 #include "Objectness_predict.h"
 #include "ValStructVec.h"
-#include "CmShow.h"
 
 using namespace cv;
 using namespace std;
@@ -22,7 +50,11 @@ class API_MAINBOBY
 #define HEIGHT 256
 typedef unsigned long long UInt64;
 
+//bingpp
+#define USING_BINGPP 1
+
 #define GET_ROI_TRAIN 1
+
 
 /***********************************public***********************************/
 public:
@@ -39,9 +71,6 @@ public:
 		const char* 	layerName, 							//[In]:layerName:"fc7"
 		const int 		binGPU, 							//[In]:USE GPU(1) or not(0)
 		const int 		deviceID );							//[In]:GPU ID
-
-	/***********************************ResizeImg*************************************/
-	IplImage* ResizeImg( IplImage *img, int MaxLen = 512 );
 
 	/***********************************Get_Hypothese*************************************/
 	int Get_Bing_Hypothese( IplImage *img, vector< pair<float, Vec4i> > &outBox, int BinTraining );
@@ -74,6 +103,7 @@ public:
 private:
 
 	/***********************************Init**********************************/
+	int 				MAX_THREAD_NUM;
 	RunTimer<double> 	run;
 	char 				szImgPath[256];
 
@@ -132,6 +162,8 @@ private:
 		IplImage						*image, 			//[In]:image
 		UInt64							ImageID,			//[In]:ImageID
 		const char* 					layerName,			//[In]:Layer Name by Extract
+		const int 						width, 				//[In]:roi-width
+		const int 						height,				//[In]:roi-height
 		vector< pair< string, float > >	&Res);				//[Out]:Res:In37Class/ads6Class/imgquality3class
 
 	/***********************************Merge Label**********************************/
@@ -142,11 +174,15 @@ private:
 
 	int Merge90_37classLabel(
 		vector< pair< int, float > >		inImgLabel, 		//[In]:ImgDetail from GetLabel
+		const int 							width, 				//[In]:roi-width
+		const int 							height,				//[In]:roi-height
 		vector< pair< string, float > > 	&LabelInfo,			//[Out]:LabelInfo
 		vector< pair< int,float > > 		&intLabelInfo );	//[Out]:intLabelInfo
 
 	int MergeIn90_6ClassLabel(
 		vector< pair< int, float > > 		inImgLabel, 		//[In]:inImgLabel
+		const int 							width, 				//[In]:roi-width
+		const int 							height,				//[In]:roi-height
 		vector< pair< string, float > > 	&LabelInfo,			//[Out]:outImgLabel
 		vector< pair< int,float > > 		&intLabelInfo );	//[Out]:intLabelInfo
 
@@ -159,5 +195,7 @@ private:
 		vector< pair< pair< string, Vec4i >, float > > 	&outImgLabel);
 		
 };
+
+#endif
 
 

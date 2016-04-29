@@ -1,3 +1,6 @@
-https://github.com/ShaoqingRen/faster_rcnn
 
-use caffe-faster-rcnn:https://github.com/rbgirshick/caffe-fast-rcnn/tree/fast-rcnn
+/*****faster-rcnn*****/
+
+1.use caffe-faster-rcnn:https://github.com/rbgirshick/caffe-fast-rcnn/tree/0dcd397b29507b8314e252e850518c5695efbb83
+
+2.use faster rcnn test(python-->c++):https://github.com/rbgirshick/py-faster-rcnn

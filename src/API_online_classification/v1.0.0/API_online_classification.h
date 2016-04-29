@@ -1,4 +1,27 @@
-#pragma once
+/*
+ * =====================================================================================
+ *
+ *       filename:  API_online_classification.h
+ *
+ *    description:  online classification interface 
+ *
+ *        version:  1.0
+ *        created:  2016-01-23
+ *       revision:  none
+ *       compiler:  g++
+ *
+ *         author:  xiaogao
+ *        company:  in66.com
+ *
+ *      copyright:  2016 itugo Inc. All Rights Reserved.
+ *      
+ * =====================================================================================
+ */
+
+#ifndef _API_ONLINE_CLASSIFICATION_H_
+#define _API_ONLINE_CLASSIFICATION_H_
+
+
 #include <vector>
 #include <opencv/cv.h>
 
@@ -116,6 +139,6 @@ private:
 
 };
 
-
+#endif
 	
 

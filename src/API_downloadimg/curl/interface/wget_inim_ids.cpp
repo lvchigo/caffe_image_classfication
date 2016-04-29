@@ -39,6 +39,16 @@ int API_WGET_INIM::wget_image_file_sys(const std::string &url, const std::string
 {
 	std::string wgetFile = "wget -q -T 3 -t 1 " + url + " -O " + image_file;
 	int nRet = system( wgetFile.c_str() );
+	//printf("wgetFile:%s\n",wgetFile.c_str());
+
+/*	char wgetFile[1024]={0};
+	sprintf( wgetFile, "wget -q -T 3 -t 1 %s -O %s", url.c_str(), image_file.c_str() );
+	printf("wgetFile:%s\n",wgetFile);
+	int nRet = system( wgetFile );
+	printf("wgetFile:%s\n",wgetFile);
+	printf("url:%s\n",url.c_str());
+	printf("image_file:%s\n",image_file.c_str());
+	printf("\n");*/
 
 	return 0;
 }

@@ -534,7 +534,7 @@ int API_MAINBOBY::Get_Xml_Hypothese(
 	if ( binHypothese == 1 )
 	{
 		roiSizeMultiple = 0.05;
-		roiSizeNum = 6;
+		roiSizeNum = 4;	//2,4,6
 	}
 	else
 	{
@@ -641,7 +641,7 @@ int API_MAINBOBY::Get_Bing_Hypothese( IplImage *img, vector< pair<float, Vec4i> 
 	}
 
 	/***********************************init*************************************/
-	int width, height, rWidth, rHeight, T_WH, topN = 1000;
+	int width, height, rWidth, rHeight, T_WH, topN = 100;//100,500,1000
 	float ratio_wh = 0;
 
 	/************************getObjBndBoxes*****************************/

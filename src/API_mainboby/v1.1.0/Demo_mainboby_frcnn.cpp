@@ -203,7 +203,7 @@ int Change_XML_Name( char *szQueryList, char* imgPath, char* xmlSavePath, char* 
 	char tPath[256];
 	char loadImgPath[256];
 	char szImgPath[256];
-	int i, j, svImg, nRet = 0;
+	int i, j, svImg, bin_Bad_Label, nRet = 0;
 	unsigned long long nCount, labelCount, ImageID = 0;
 	FILE *fpListFile = 0;
 
@@ -237,10 +237,19 @@ int Change_XML_Name( char *szQueryList, char* imgPath, char* xmlSavePath, char* 
 			cout << "Err to load_xml!" << endl;
 			continue;
 		}
-		
+
+		bin_Bad_Label = 0;
 		for(i=0;i<vecLabelRect.size();i++)
 		{
 			strLabel = vecLabelRect[i].first;
+
+			//err label
+			if ( (strLabel == "Copy of face") || (strLabel == "eye") )
+			{
+				bin_Bad_Label = 1;
+				break;
+			}
+			
 			//write map
 			itLabel = mapLabel.find(strLabel);		
 			if (itLabel != mapLabel.end()) // find it
@@ -248,6 +257,9 @@ int Change_XML_Name( char *szQueryList, char* imgPath, char* xmlSavePath, char* 
 			else
 				mapLabel[strLabel] = 1;
 		}
+
+		if ( bin_Bad_Label == 1 )
+			continue;
 
 		//cp xml file
 		nRet = api_mainboby.write_xml( filename, xmlSavePath, vecLabelRect );
@@ -258,8 +270,8 @@ int Change_XML_Name( char *szQueryList, char* imgPath, char* xmlSavePath, char* 
 		}
 
 		//cp img file
-		sprintf( tPath, "cp %s/%s.jpg %s/%s.jpg", imgPath, filename.c_str(), imgSavePath, filename.c_str() );
-		system( tPath );
+		//sprintf( tPath, "cp %s/%s.jpg %s/%s.jpg", imgPath, filename.c_str(), imgSavePath, filename.c_str() );
+		//system( tPath );
 
 		nCount++;
 		if( nCount%50 == 0 )
@@ -1207,7 +1219,7 @@ int Get_Xml_Bing_ROI( char *szQueryList, char* loadXmlPath, char* KeyFilePath, c
 
 		/************************get xml Hypothese*****************************/
 		vecOutXmlRect.clear();
-		int binHypothese = 0; //0-normal,1-for mainbody v1.0.0
+		int binHypothese = 1; //0-normal,1-for mainbody v1.0.0
 		nRet = api_mainboby.Get_Xml_Hypothese( xmlImageID, img->width, img->height, vecXmlLabelRect, vecOutXmlRect, binHypothese );
 		if ( (nRet!=0) || (vecOutXmlRect.size()<1) )
 		{

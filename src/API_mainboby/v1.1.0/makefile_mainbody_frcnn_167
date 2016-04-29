@@ -35,7 +35,7 @@ COMMEN_SRC = $(COMMEN_DIR)/API_commen.cpp
 PLOG_DIR = ../src/API_plog
 PLOG_INC = -I$(PLOG_DIR)
 
-SD_DIR = ../src/API_similardetect
+SD_DIR = ../src/API_similardetect/v1.0.0
 SD_INC = -I$(SD_DIR)/include
 SD_LIB = -L$(SD_DIR)/lib
 

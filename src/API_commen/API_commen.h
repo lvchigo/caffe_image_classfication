@@ -1,4 +1,26 @@
-#pragma once
+/*
+ * =====================================================================================
+ *
+ *       filename:  API_commen.h
+ *
+ *    description:  commen interface
+ *
+ *        version:  1.0
+ *        created:  2016-04-20
+ *       revision:  none
+ *       compiler:  g++
+ *
+ *         author:  xiaogao
+ *        company:  in66.com
+ *
+ *      copyright:  2016 itugo Inc. All Rights Reserved.
+ *      
+ * =====================================================================================
+ */
+
+#ifndef _API_COMMEN_H_
+#define _API_COMMEN_H_
+
 #include <string>
 #include <vector>
 #include <opencv/cv.h>
@@ -45,16 +67,26 @@ public:
 
 	/***********************************loadWordDict*************************************/
 	void loadWordDict(const char *filePath, vector< string > &labelWords);
+
+	/***********************************doc2vec_CountLines************************/
+	long doc2vec_CountLines(char *filename);
 	
 	/***********************************Img_GetMutiRoi*************************************/
 	int Img_GetMutiRoi( IplImage *MainBody, UInt64 ImageID, vector<Mat_<Vec3f> > &OutputImg );
 	int Img_GetMutiRoi_ImageQuality( IplImage *MainBody, UInt64 ImageID, vector<Mat_<Vec3f> > &OutputImg );
 	void Img_Get10MutiRoi( IplImage *MainBody, UInt64 ImageID, vector<Mat_<Vec3f> > &OutputImg );
 
+	/***********************************ResizeImg*************************************/
+	IplImage* ResizeImg( IplImage *img, int MaxLen = 512 );
+	IplImage* ResizeImg( IplImage *img, float &ratio, int MaxLen = 512 );
+
 	/***********************************Normalization*************************************/
 	int Normal_MinMax( vector<float> inFeat, vector<float> &NormFeat );
 	int Normal_L1( vector<float> inFeat, vector<float> &NormFeat );
 	int Normal_L2( vector<float> inFeat, vector<float> &NormFeat );
+
+	/***********************************ExtractFeat_Entropy*******************************/
+	int ExtractFeat_Entropy( vector<float> inFeat, float &Entropy );
 
 	/***********************************Image Format Change*************************************/
 	uchar* ipl2mat(IplImage* image);			//for matlab
@@ -82,6 +114,12 @@ public:
 	int ExtractFeat_Blur( IplImage* pSrcImg, vector< float > &fBlur );				//5D
 	int ExtractFeat_Constract( IplImage* pSrcImg, vector< float > &fContrast );	//4D
 	double ExtractFeat_Constract_GetBlockDev(IplImage* ScaleImg);
+
+	/***********************************FaceDetect_Count_FaceRectFromPoint******************/
+	int Count_FaceRectFromPoint( int loadPoint[], int width, int height, vector< pair<string, Vec4i> > &FacePoint );
+
+	/***********************************Count Rect IOU******************/
+	int Rect_IOU(Vec4i rect1, Vec4i rect2, float &iou); 
 
 /***********************************private***********************************/
 private:
@@ -149,6 +187,7 @@ class RunTimer
 	}
 };/*RunTimer*/
 
+#endif
 
 	
 

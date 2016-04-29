@@ -1,4 +1,6 @@
-#pragma once
+#ifndef _API_CAFFE_H_
+#define _API_CAFFE_H_
+
 #include <opencv/cv.h>
 #include <vector>
 
@@ -84,4 +86,7 @@ private:
 		const long labelNum, const char* layerName, vector< pair< int, float > > &vecLabel, vector< vector<float> > &imgFeat);
 
 };
+
+#endif
+
 

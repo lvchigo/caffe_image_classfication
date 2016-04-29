@@ -44,6 +44,9 @@
 #include "ColorLayout.h"
 #include "EdgeHist.h"
 
+#include <omp.h>	//openmp--bingpp
+
+
 using namespace cv;
 using namespace std;
 
@@ -118,16 +121,15 @@ int API_MAINBOBY::Init(
 	   return TEC_INVALID_PARAM;
 	}
 
-	/***********************************Init Bing*************************************/
-	objNess = new Objectness(2, 8, 2);
-	//sprintf(tPath, "%s/mainboby/voc2007/ObjNessB2W8MAXBGR",KeyFilePath);
-	sprintf(tPath, "%s/mainboby/bing_in2016/ObjNessB2W8MAXBGR",KeyFilePath);
-	objNess->loadTrainedModelOnly(tPath);
-	
 	/***********************************Init api_caffe*************************************/
+	//vgg-16
 	sprintf(tPath, "%s/vgg_16/deploy_vgg_16.prototxt",KeyFilePath);
 	sprintf(tPath2, "%s/vgg_16/VGG_ILSVRC_16_layers.caffemodel",KeyFilePath);
 	sprintf(tPath3, "%s/vgg_16/imagenet_mean.binaryproto",KeyFilePath);
+	//deep-residual-networks-50
+	//sprintf(tPath, "%s/deep-residual-networks/ResNet-50-deploy.prototxt",KeyFilePath);
+	//sprintf(tPath2, "%s/deep-residual-networks/ResNet-50-model.caffemodel",KeyFilePath);
+	//sprintf(tPath3, "%s/deep-residual-networks/ResNet_mean.binaryproto",KeyFilePath);
 	nRet = api_caffe.Init( tPath, tPath2, tPath3, layerName, binGPU, deviceID ); 
 	if (nRet != 0)
 	{
@@ -136,8 +138,9 @@ int API_MAINBOBY::Init(
 	}
 
 	/***********************************Init Model_SVM_in90class*************************************/
-	sprintf(tPath, "%s/mainboby/linearsvm_mainboby_90class_16_20160110.model",KeyFilePath);	//linearSVM
-	//sprintf(tPath, "%s/mainboby/linearsvm_mainboby_90class_32_20160110.model",KeyFilePath);	//linearSVM
+	//sprintf(tPath, "%s/mainboby/linearsvm_mainboby_90class_16_20160110.model",KeyFilePath);	//vgg
+	sprintf(tPath, "%s/mainboby/linearsvm_mainboby_90class_16_20160217.model",KeyFilePath);	//vgg
+	//sprintf(tPath, "%s/mainboby/msdrn_pool5feat_90_20160224.model",KeyFilePath);	//msdrn
 	printf("load Model_SVM_in90class:%s\n",tPath);
 	nRet = api_libsvm_90class.Init(tPath); 
 	if (nRet != 0)
@@ -147,8 +150,9 @@ int API_MAINBOBY::Init(
 	}
 
 	/***********************************Init Model_SVM_in6class*************************************/
-	//sprintf(tPath, "%s/mainboby/linearsvm_mainbody_in6class_151201.model", KeyFilePath);		//linearSVM
-	sprintf(tPath, "%s/mainboby/linearsvm_mainboby_in90-6class_16_20160110.model", KeyFilePath);		//linearSVM
+	//sprintf(tPath, "%s/mainboby/linearsvm_mainboby_in90-6class_16_20160110.model", KeyFilePath);  //vgg
+	sprintf(tPath, "%s/mainboby/linearsvm_mainboby_in90-6class_16_20160225.model", KeyFilePath);  //vgg
+	//sprintf(tPath, "%s/mainboby/msdrn_pool5feat_90_6class_20160224.model", KeyFilePath);  //msdrn
 	printf("load Model_SVM_in6class:%s\n",tPath);
 	nRet = api_libsvm_in6Class.Init(tPath); 
 	if (nRet != 0)
@@ -157,10 +161,22 @@ int API_MAINBOBY::Init(
 	   return TEC_INVALID_PARAM;
 	}
 
+	/***********************************Init Bing*************************************/
+	objNess = new Objectness(2, 8, 2);
+	sprintf(tPath, "%s/mainboby/voc2007/ObjNessB2W8MAXBGR",KeyFilePath);
+	//sprintf(tPath, "%s/mainboby/bing_in2016/ObjNessB2W8MAXBGR",KeyFilePath);
+	objNess->loadTrainedModelOnly(tPath);
+	
+#if USING_BINGPP
+	//MAX_THREAD_NUM = omp_get_max_threads();
+	//initGPU(MAX_THREAD_NUM);	//add by bingpp
+
+	initGPU(1); //add by bingpp
+#endif
+
 	/***********************************Load dic_90Class File**********************************/
 	dic_90Class.clear();
 	sprintf(tPath, "%s/mainboby/dict_90class",KeyFilePath);
-	//sprintf(tPath, "%s/mainboby/dict_74class",KeyFilePath);
 	printf("load dic_90Class:%s\n",tPath);
 	api_commen.loadWordDict(tPath,dic_90Class);
 	printf( "dict:size-%d,tag:", int(dic_90Class.size()) );
@@ -590,33 +606,6 @@ int API_MAINBOBY::GetIoU_Hypothese_withEntropy(
 	return nRet;
 }
 
-IplImage* API_MAINBOBY::ResizeImg( IplImage *img, int MaxLen )
-{
-	int rWidth, rHeight, nRet = 0;
-
-	IplImage *imgResize;
-	if( ( img->width>MaxLen ) || ( img->height>MaxLen ) )
-	{
-		nRet = api_commen.GetReWH( img->width, img->height, MaxLen, rWidth, rHeight );	
-		if (nRet != 0)
-		{
-			LOOGE<<"[GetReWH]";
-			return NULL;
-		}
-
-		/*****************************Resize Img*****************************/
-		imgResize = cvCreateImage(cvSize(rWidth, rHeight), img->depth, img->nChannels);
-		cvResize( img, imgResize );
-	}
-	else
-	{
-		imgResize = cvCreateImage(cvSize(img->width, img->height), img->depth, img->nChannels);
-		cvCopy( img, imgResize, NULL );
-	}
-
-	return imgResize;
-}
-
 //BinTraining:2-NO Remove Rectfor Training;1-Remove small Rect for Training;0-Remove small Rect for Test
 int API_MAINBOBY::Get_Bing_Hypothese( IplImage *img, vector< pair<float, Vec4i> > &outBox, int BinTraining )
 {
@@ -801,6 +790,10 @@ int API_MAINBOBY::Get_Hypothese( IplImage *img, ValStructVec<float, Vec4i> &outB
 	vector< float > featHypothese;
 	vector< pair<int,double> > vecEntropy;
 
+	const static Scalar colors[] =  { 	CV_RGB(0,0,255),	CV_RGB(0,255,255),	CV_RGB(0,255,0),	
+										CV_RGB(255,255,0),	CV_RGB(255,0,0),	CV_RGB(255,0,255),
+										CV_RGB(0,128,255), 	CV_RGB(255,128,0)} ;
+
 	/************************getObjBndBoxes*****************************/
 	ValStructVec<float, Vec4i> inBox;
 	Mat matImg(img);
@@ -832,11 +825,20 @@ int API_MAINBOBY::Get_Hypothese( IplImage *img, ValStructVec<float, Vec4i> &outB
 			break;
 	}
 
-	if (bigBoxes.size()<1)
+	if (bigBoxes.size()<15)
 	{	
 		LOOGE<<"[remove small roi err]";
 		return TEC_INVALID_PARAM;
 	}
+
+	/************************save img data*****************************/
+/*	for(i=0;i<bigBoxes.size();i++) 
+	{	
+		Scalar color = colors[i%8];
+		rectangle( matImg, cvPoint(bigBoxes[i][0], bigBoxes[i][1]),
+                   cvPoint(bigBoxes[i][2], bigBoxes[i][3]), color, 3, 8, 0);
+	}
+	imwrite( "9850_15.jpg", matImg );*/
 
 	/***********************************getROI && Feat*************************************/
 	KMeans_topN = bigBoxes.size();
@@ -1174,7 +1176,7 @@ int API_MAINBOBY::ExtractFeat(
 			nRet = api_commen.Normal_L2(imgFeat[i],normIn73ClassFeat);
 			if (nRet != 0)
 			{
-			   LOOGE<<"Fail to GetFeat!!";
+			   LOOGE<<"Fail to Normal_L2!!";
 			   return nRet;
 			}
 
@@ -1271,6 +1273,8 @@ int API_MAINBOBY::Predict_in37class(
 	IplImage						*image, 			//[In]:image
 	UInt64							ImageID,			//[In]:ImageID
 	const char* 					layerName,			//[In]:Layer Name by Extract
+	const int 						width, 				//[In]:roi-width
+	const int 						height,				//[In]:roi-height
 	vector< pair< string, float > >	&Res)				//[Out]:Res:In37Class/ads6Class/imgquality3class
 {
 	if(!image || (image->width<16) || (image->height<16) || image->nChannels != 3 || image->depth != IPL_DEPTH_8U) 
@@ -1317,7 +1321,7 @@ int API_MAINBOBY::Predict_in37class(
 		/************************Merge37classLabel*****************************/	
 		ResIn37Class.clear();
 		tmpResIn37Class.clear();
-		nRet = Merge90_37classLabel( tmpRes, ResIn37Class, tmpResIn37Class );
+		nRet = Merge90_37classLabel( tmpRes, width, height, ResIn37Class, tmpResIn37Class );
 		if (nRet != 0)
 		{	
 			LOOGE<<"Fail to Merge37classLabel!!";
@@ -1341,7 +1345,7 @@ int API_MAINBOBY::Predict_in37class(
 			ResIn37Class.clear();
 			tmpResIn37Class.clear();
 			//printf("api_libsvm_in6Class.MergeIn6ClassLabel!\n");
-			nRet = MergeIn90_6ClassLabel( tmpRes, ResIn37Class, tmpResIn37Class );
+			nRet = MergeIn90_6ClassLabel( tmpRes, width, height, ResIn37Class, tmpResIn37Class );
 			if (nRet != 0)
 			{	
 				LOOGE<<"Fail to MergeIn6ClassLabel!!";
@@ -1421,8 +1425,8 @@ int API_MAINBOBY::Predict_Hypothese(
 
 		/***********************************Predict_in90class**********************************/
 		Res.clear();
-		//nRet = Predict_in37class( ImgResize, ImageID, layerName, Res );
-		nRet = Predict_in90class( ImgResize, ImageID, layerName, Res );
+		nRet = Predict_in37class( ImgResize, ImageID, layerName, width, height, Res );
+		//nRet = Predict_in90class( ImgResize, ImageID, layerName, Res );
 		if (nRet != 0) 
 		{
 			LOOGE<<"Fail to Predict_in37class!!";
@@ -1433,7 +1437,7 @@ int API_MAINBOBY::Predict_Hypothese(
 
 		/************************save img data*****************************/
 		//if (Res[0].first != "other.other.other") 
-		if ( (Res[0].second >= 0.7 ) && (width>96) && (height>96) )
+		if ( (Res[0].second >= 0.8 ) && (width>64) && (height>64) )
 		{	
 			sprintf(szImgPath, "res_roi/%s/%s_%.2f_%lld.jpg",
 				Res[0].first.c_str(),Res[0].first.c_str(),Res[0].second,ImageID);
@@ -1474,7 +1478,7 @@ int API_MAINBOBY::Predict(
 		LOOGE<<"[Get_Hypothese Err!!ImageID:]"<<ImageID;
 		return TEC_INVALID_PARAM;
 	}
-
+	
 	MergeRes.clear();
 	for(i=0;i<HypotheseBox.size();i++)
 	{	
@@ -1491,8 +1495,10 @@ int API_MAINBOBY::Predict(
 		cvResize( MutiROI, ImgResize );
 
 		singleRes.clear();
+		//check 90class
 		//nRet = Predict_in90class( ImgResize, ImageID, layerName, singleRes );
-		nRet = Predict_in37class( ImgResize, ImageID, layerName, singleRes );
+		//predict merge class
+		nRet = Predict_in37class( ImgResize, ImageID, layerName, width, height, singleRes );
 		if (nRet != 0) 
 		{
 			LOOGE<<"Fail to Predict_in37class!!";
@@ -1507,7 +1513,7 @@ int API_MAINBOBY::Predict(
 		cvReleaseImage(&MutiROI);MutiROI = 0;
 		cvReleaseImage(&ImgResize);ImgResize = 0;
 	}
-
+	
 	Res.clear();
 	if ( MergeRes.size()<1 )
 	{
@@ -1703,6 +1709,8 @@ int API_MAINBOBY::Merge90classLabel(
 
 int API_MAINBOBY::Merge90_37classLabel(
 	vector< pair< int, float > >		inImgLabel, 		//[In]:ImgDetail from GetLabel
+	const int 							width, 				//[In]:roi-width
+	const int 							height,				//[In]:roi-height
 	vector< pair< string, float > > 	&LabelInfo,			//[Out]:LabelInfo
 	vector< pair< int,float > > 		&intLabelInfo )		//[Out]:intLabelInfo
 {
@@ -1715,17 +1723,17 @@ int API_MAINBOBY::Merge90_37classLabel(
 	int i,index,tmpLabel,nRet = 0;
 	float score = 0.0;	
 
-	//other.other.other-55
+/*	//source
 	const int onlineLabel[90] = {	0, 1, 2, 55,4, 5, 55,7, 8, 9, 
 									10,55,12,13,14,15,55,55,18,19,
 									20,21,22,23,24,25,55,27,28,29,
 									30,31,32,33,55,35,36,37,38,55,
 									40,55,42,43,55,45,46,47,55,55,
 									50,51,52,53,54,55,56,57,58,59,
-									60,61,62,63,64,65,66,57,58,69,
+									60,61,62,63,64,65,66,67,68,69,
 									70,71,72,73,55,75,55,55,55,79,
 									55,55,55,55,84,85,86,87,88,89};
-	
+
 	const float T_Label[90] = {		0.91,0.91,0.85,0.7, 0.96,0.8, 0.7, 0.91,0.94,0.8,	
 			       					0.9, 0.7, 0.92,0.95,0.9, 0.94,0.7, 0.7, 0.96,0.9,	//fruit
 			       					0.9, 0.86,0.9, 0.9, 0.9, 0.8, 0.7, 0.85,0.9, 0.9,	
@@ -1735,6 +1743,51 @@ int API_MAINBOBY::Merge90_37classLabel(
 			        				0.9, 0.9, 0.9, 0.9, 0.8, 0.95,0.9, 0.9, 0.9, 0.8,	//people.*
 			        				0.9, 0.8, 0.9, 0.8, 0.7, 0.9, 0.7, 0.7, 0.7, 0.9,
 			        				0.7, 0.7, 0.7, 0.7, 0.8, 0.9, 0.9, 0.85,0.91,0.8};
+*/
+	//shuying
+	const int onlineLabel[90] = {	0, 55,2, 55,4, 5, 55,7, 8, 9, 
+									10,11,12,13,14,15,55,55,18,19,
+									20,21,22,55,55,25,55,27,28,29,
+									30,55,32,33,34,35,55,55,38,55,
+									40,55,42,55,55,45,46,47,55,55,
+									50,55,55,53,54,55,55,57,55,59,
+									55,61,55,63,64,65,66,67,55,69,
+									70,71,55,73,74,55,55,55,55,79,
+									55,55,55,55,84,85,55,87,88,89};
+
+	//shuying
+	const float T_Label[90] = { 	0.91,0.91,0.91,1.0, 0.95,0.8, 1.0, 0.96,0.95,0.8,	
+									0.95,0.95,0.93,0.97,0.92,0.96,1.0, 1.0, 0.99,0.8,	//fruit
+									1.0, 0.9, 0.8, 1.0, 1.0, 0.9, 1.0, 0.92,0.9, 0.9,	
+									0.9, 0.9, 0.92,0.9, 0.9, 0.94,1.0, 0.8, 0.9, 1.0,	//flower
+									0.9, 1.0, 0.9, 0.9, 1.0, 0.9, 0.7, 0.9, 1.0, 1.0,	
+									0.93,1.0, 1.0, 0.9, 0.94,1.0, 0.8, 0.93,0.8, 0.85,	//shoe,text,people.*
+									0.9, 0.93,0.9, 0.9, 0.8, 0.95,0.9, 0.9, 1.0, 0.9,	//people.*
+									0.9, 0.85,1.0, 0.8, 0.9, 1.0, 1.0, 1.0, 1.0, 0.94,
+									1.0, 1.0, 1.0, 1.0, 0.8, 0.97,0.93,0.85,0.93,0.92};
+/*
+	//shuying
+	const int onlineLabel[90] = {	0, 55,2, 55,4, 5, 55,7, 8, 9, 
+									10,11,12,13,14,15,55,55,18,19,
+									20,21,22,55,55,25,55,27,28,29,
+									30,55,32,33,34,35,55,55,38,55,
+									40,55,42,55,55,45,46,47,55,55,
+									50,55,55,53,54,55,55,57,55,59,
+									55,61,55,63,64,65,66,67,55,69,
+									70,71,55,73,74,55,55,55,55,79,
+									55,55,55,55,84,85,55,87,88,89};
+
+	//shuying
+	const float T_Label[90] = { 	0.91,0.91,0.91,1.0, 0.95,0.8, 1.0, 0.96,0.95,0.8,	
+									0.95,0.95,0.93,0.97,0.92,0.96,1.0, 1.0, 0.99,0.8,	//fruit
+									1.0, 0.9, 0.8, 1.0, 1.0, 0.9, 1.0, 0.92,0.9, 0.9,	
+									0.9, 0.9, 0.92,0.9, 0.9, 0.94,1.0, 0.8, 0.9, 1.0,	//flower
+									0.9, 1.0, 0.9, 0.9, 1.0, 0.9, 0.7, 0.9, 1.0, 1.0,	
+									0.93,1.0, 1.0, 0.9, 0.94,1.0, 0.8, 0.93,0.8, 0.85,	//shoe,text,people.*
+									0.9, 0.93,0.9, 0.9, 0.8, 0.95,0.9, 0.9, 1.0, 0.9,	//people.*
+									0.9, 0.85,1.0, 0.8, 0.9, 1.0, 1.0, 1.0, 1.0, 0.94,
+									1.0, 1.0, 1.0, 1.0, 0.8, 0.97,0.93,0.85,0.93,0.92};
+*/	
 	LabelInfo.clear();
 	intLabelInfo.clear();
 	
@@ -1746,6 +1799,12 @@ int API_MAINBOBY::Merge90_37classLabel(
 		//printf( "MergeLabel:i-%d,index-%d,score-%.4f\n",i,index, score );
 		if ( i == 0 )
 		{
+			//change small scene roi to other
+			if ( ( index == 84 ) && ((width<64)||(height<64)) )
+			{
+				index = 55;	//change to other
+			}
+			
 			if (score>=T_Label[index])
 			{
 				tmpLabel = onlineLabel[index];
@@ -1761,6 +1820,8 @@ int API_MAINBOBY::Merge90_37classLabel(
 
 int API_MAINBOBY::MergeIn90_6ClassLabel(
 	vector< pair< int, float > > 		inImgLabel, 		//[In]:inImgLabel
+	const int 							width, 				//[In]:roi-width
+	const int 							height,				//[In]:roi-height
 	vector< pair< string, float > > 	&LabelInfo,			//[Out]:outImgLabel
 	vector< pair< int,float > > 		&intLabelInfo )		//[Out]:intLabelInfo
 {
@@ -1772,8 +1833,15 @@ int API_MAINBOBY::MergeIn90_6ClassLabel(
 
 	int i,index,tmpLabel,nRet = 0;
 	float score = 0.0;
-	const int onlineLabel[6] = { 9, 37, 55, 63, 73, 84 };	//[food,goods,other,people,pet,scene]
-	const float T_Label[6] = {	0.9, 0.8, 0.8, 0.66, 0.8, 0.85 };
+	
+	//source
+	//const int onlineLabel[6] = { 9, 37, 55, 63, 73, 84 };	//[food,goods,other,people,pet,scene]
+	//const float T_Label[6] = { 0.9, 0.8, 0.8, 0.66, 0.8, 0.85 };
+	
+	//shuying
+	const int onlineLabel[6] = { 9, 55, 55, 63, 73, 84 };	//[food,goods,other,people,pet,scene]
+	const float T_Label[6] = { 0.91, 0.8, 0.8, 0.66, 0.94, 0.85 };
+	
 	LabelInfo.clear();
 	intLabelInfo.clear();
 	
@@ -1785,6 +1853,12 @@ int API_MAINBOBY::MergeIn90_6ClassLabel(
 		//printf( "MergeLabel:i-%d,index-%d,score-%.4f\n",i,index, score );
 		if ( 0 == i )
 		{
+			//change small scene roi to other
+			if ( ( index == 5) && ((width<64)||(height<64)) )
+			{
+				index = 2;	//change to other
+			}
+			
 			if (score>=T_Label[index])
 			{
 				tmpLabel = onlineLabel[index];
@@ -1797,7 +1871,6 @@ int API_MAINBOBY::MergeIn90_6ClassLabel(
 	
 	return nRet;
 }
-
 
 
 /***********************************Release**********************************/
@@ -1815,6 +1888,14 @@ void API_MAINBOBY::Release()
 	/***********************************SVM Model******libsvm3.2.0********************/
 	api_libsvm_90class.Release();
 	api_libsvm_in6Class.Release();
+
+	/***********************************Release Bing*************************************/
+	delete objNess;
+
+#if USING_BINGPP
+	//releaseGPU(MAX_THREAD_NUM);//add by bingpp
+	releaseGPU(1);//add by bingpp
+#endif
 
 }
 

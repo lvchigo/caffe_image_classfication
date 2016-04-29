@@ -1,4 +1,26 @@
-#pragma once
+/*
+ * =====================================================================================
+ *
+ *       filename:  API_linearsvm.h
+ *
+ *    description:  linearsvm interface 
+ *
+ *        version:  1.0
+ *        created:  2016-01-23
+ *       revision:  none
+ *       compiler:  g++
+ *
+ *         author:  xiaogao
+ *        company:  in66.com
+ *
+ *      copyright:  2016 itugo Inc. All Rights Reserved.
+ *      
+ * =====================================================================================
+ */
+
+#ifndef _API_LINEARSVM_H_
+#define _API_LINEARSVM_H_
+
 #include <vector>
 #include "linear.h"
 
@@ -43,4 +65,7 @@ private:
 	struct model *linearModel;		//liblinear svm 1.98
 	
 };
+
+#endif
+
 

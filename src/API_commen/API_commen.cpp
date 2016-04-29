@@ -169,6 +169,31 @@ void API_COMMEN::loadWordDict(const char *filePath, vector< string > &labelWords
 	assert(labelWords.size());
 }
 
+/***********************************CountLines***********************************/
+long API_COMMEN::doc2vec_CountLines(char *filename)
+{
+	ifstream ReadFile;
+	long n=0;
+	char line[4096];
+	string temp;
+	ReadFile.open(filename,ios::in);
+	if(ReadFile.fail())
+	{
+	   return 0;
+	}
+	else
+	{
+		while(getline(ReadFile,temp))
+		{
+		   	n++;
+		}
+	}
+
+	ReadFile.close();
+
+	return n;
+}
+
 void API_COMMEN::Img_hMirrorTrans(const Mat &src, Mat &dst)
 {
     CV_Assert(src.depth() == CV_8U);
@@ -476,6 +501,57 @@ void API_COMMEN::Img_Get10MutiRoi( IplImage *MainBody, UInt64 ImageID, vector<Ma
 	}
 }
 
+IplImage* API_COMMEN::ResizeImg( IplImage *img, int MaxLen )
+{
+	int rWidth, rHeight, nRet = 0;
+
+	IplImage *imgResize;
+	if( ( img->width>MaxLen ) || ( img->height>MaxLen ) )
+	{
+		nRet = GetReWH( img->width, img->height, MaxLen, rWidth, rHeight );	
+		if (nRet != 0)
+		{
+			printf("GetReWH err!!\n");
+			return NULL;
+		}
+
+		/*****************************Resize Img*****************************/
+		imgResize = cvCreateImage(cvSize(rWidth, rHeight), img->depth, img->nChannels);
+		cvResize( img, imgResize );
+	}
+	else
+	{
+		imgResize = cvCreateImage(cvSize(img->width, img->height), img->depth, img->nChannels);
+		cvCopy( img, imgResize, NULL );
+	}
+
+	return imgResize;
+}
+
+IplImage* API_COMMEN::ResizeImg( IplImage *img, float &ratio, int MaxLen )
+{
+	int rWidth, rHeight, nRet = 0;
+	ratio = 1.0;
+
+	//Resize
+	if (img->width > img->height) {
+		if (img->width > MaxLen)
+			ratio = MaxLen*1.0 / img->width;
+	} 
+	else 
+	{	
+		if (img->height > MaxLen)
+			ratio = MaxLen*1.0 / img->height;
+	}
+	rWidth =  (int )img->width * ratio;
+	rHeight = (int )img->height * ratio;
+
+	IplImage *imgResize = cvCreateImage(cvSize(rWidth, rHeight), img->depth, img->nChannels);
+	cvResize( img, imgResize );
+
+	return imgResize;
+}
+
 int API_COMMEN::Normal_MinMax( vector<float> inFeat, vector<float> &NormFeat )
 {
 	if (inFeat.size()==0)
@@ -561,6 +637,34 @@ int API_COMMEN::Normal_L2( vector<float> inFeat, vector<float> &NormFeat )
 	}
 
 	return TOK;
+}
+
+// calculate entropy of an image
+int API_COMMEN::ExtractFeat_Entropy( vector<float> inFeat, float &Entropy )
+{
+    if(inFeat.size()==0)
+    {
+        return TEC_INVALID_PARAM;
+    }
+
+    int i,ret = TOK;
+	Entropy = 0;
+	
+	vector<float> NormFeat;
+	ret = Normal_L2( inFeat, NormFeat );
+	if (ret != 0)
+	{
+	   printf("Fail to Normal_L2!!\n");
+	   return ret;
+	}
+
+    for(i =0;i<inFeat.size();i++)
+    {
+        if(NormFeat[i]>0)
+            Entropy = Entropy-NormFeat[i]*(log(NormFeat[i])/log(2.0));
+    }
+
+    return ret;
 }
 
 /***********************************Image Format Change*************************************/
@@ -1674,11 +1778,202 @@ double API_COMMEN::ExtractFeat_Constract_GetBlockDev(IplImage* ScaleImg)
 	return Bl_Ldev.val[0];
 }
 
+/***********************************Count_FaceRectFromPoint*************************************/
+int API_COMMEN::Count_FaceRectFromPoint( int loadPoint[], int width, int height, vector< pair<string, Vec4i> > &FacePoint )
+{
+	int fx,fy,fw,fh;
+	float tmp,max_h,w_eye,w_mouse,h_eye2nose,h_nose2mouse,center_eye_x;
 
+	//string Dict_6class[6] = {"face","eye","mouse","nose","hair","bread"};
+	string Dict_7class[7] = {"face","halfface","eye","mouse","nose","hair","bread"};
 
+	FacePoint.clear();
+	
+	//commen
+	{
+		w_eye = fabs(loadPoint[2]-loadPoint[0]);
+		h_eye2nose = fabs(loadPoint[5]-(loadPoint[1]+loadPoint[3])*0.5);  //eye to nose
+		h_nose2mouse = fabs((loadPoint[7]+loadPoint[9])*0.5-loadPoint[5]);  //nose to mouse
+		max_h = (h_eye2nose>h_nose2mouse)?h_eye2nose:h_nose2mouse;
+	}
 
+	//unnormal face	
+	tmp = fabs(loadPoint[5]-(loadPoint[1]+loadPoint[3])*0.5);
+	if ( (w_eye*1.25<tmp) || (w_eye<10) )
+	{
+		return -1;
+	}
+	
+	//count face
+	{
+		fw = int(w_eye*2.5+0.5);
+		fx = int(fabs(loadPoint[2]+loadPoint[0]-fw)*0.5+0.5);			
+		fh = int(max_h*2.5+h_eye2nose+h_nose2mouse+0.5);
+		fy = int(fabs((loadPoint[1]+loadPoint[3])*0.5-max_h*1.5)+0.5);
 
+		if ( (fx>0) && (fy>0) && (fw>0) && (fh>0) && (fx+fw<=width) && (fy+fh<=height) && (fx<fx+fw) && (fy<fy+fh) )
+		{
+			Vec4i face(fx,fy,fx+fw,fy+fh);
+			FacePoint.push_back(make_pair(Dict_7class[0],face));
+		}
+		else
+		{
+			printf("face:w_%d,h_%d,fx_%d,fy_%d,fw_%d,fh_%d\n",width,height,fx,fy,fw,fh);
+		}
+	}
 
+	//count half face
+	{
+		fh = int(max_h*2.5+h_eye2nose+h_nose2mouse+0.5);
+		fy = int(fabs((loadPoint[1]+loadPoint[3])*0.5-max_h*1.5)+0.5);
 
+		center_eye_x = (loadPoint[0]+loadPoint[2])*0.5;
+		if (loadPoint[4]<=center_eye_x)
+		{
+			fw = int(w_eye*2.5+0.5);	//face-w
+			tmp = int(fabs(loadPoint[2]+loadPoint[0]-fw)*0.5+0.5);	//face-x1
+			fx = int(loadPoint[4]-0.1*w_eye+0.5);	//half face x1
+			fw = int(w_eye*2.5-(fx-tmp)+0.5);
+		}
+		else
+		{
+			fw = int(w_eye*2.5+0.5);	//face-w
+			tmp = int(loadPoint[4]+0.1*w_eye+0.5);	//half face x1
+			fx = int(fabs(loadPoint[2]+loadPoint[0]-fw)*0.5+0.5);	//face-x1
+			fw = int(tmp-fx);			
+		}
 
+		if ( (fx>0) && (fy>0) && (fw>0) && (fh>0) && (fx+fw<=width) && (fy+fh<=height) && (fx<fx+fw) && (fy<fy+fh) )
+		{
+			Vec4i halfface(fx,fy,fx+fw,fy+fh);
+			FacePoint.push_back(make_pair(Dict_7class[1],halfface));
+		}
+		else
+		{
+			printf("halfface:w_%d,h_%d,fx_%d,fy_%d,fw_%d,fh_%d\n",width,height,fx,fy,fw,fh);
+		}
+	}
+
+	//count eye
+	{
+		fw = int(w_eye*2+0.5);
+		fx = int(fabs(loadPoint[0]*3-loadPoint[2])*0.5+0.5);
+		fh = int(max_h*1.5+0.5);
+		fy = int(fabs((loadPoint[1]+loadPoint[3])*0.5-max_h*0.75)+0.5);
+
+		if ( (fx>0) && (fy>0) && (fw>0) && (fh>0) && (fx+fw<=width) && (fy+fh<=height) && (fx<fx+fw) && (fy<fy+fh) )
+		{
+			Vec4i eye(fx,fy,fx+fw,fy+fh);
+			FacePoint.push_back(make_pair(Dict_7class[2],eye));
+		}
+		else
+		{
+			printf("eye:w_%d,h_%d,fx_%d,fy_%d,fw_%d,fh_%d\n",width,height,fx,fy,fw,fh);
+		}
+	}
+
+	//count mouse
+	{
+		w_mouse = fabs(loadPoint[8]-loadPoint[6]);
+		fw = int(w_mouse*2+0.5);
+		fx = int(fabs(loadPoint[6]*3-loadPoint[8])*0.5+0.5);
+		fh = int(max_h*1.5+0.5);
+		fy = int(fabs((loadPoint[7]+loadPoint[9])*0.5-max_h*0.5)+0.5);
+
+		if ( (fx>0) && (fy>0) && (fw>0) && (fh>0) && (fx+fw<=width) && (fy+fh<=height) && (fx<fx+fw) && (fy<fy+fh) )
+		{
+			Vec4i mouse(fx,fy,fx+fw,fy+fh);
+			FacePoint.push_back(make_pair(Dict_7class[3],mouse));
+		}
+		else
+		{
+			printf("mouse:w_%d,h_%d,fx_%d,fy_%d,fw_%d,fh_%d\n",width,height,fx,fy,fw,fh);
+		}
+	}
+
+	//count nose
+	{
+		fw = (w_eye>w_mouse)?w_eye:w_mouse;
+		fx = int(fabs(loadPoint[4]-fw*0.5)+0.5);
+		fh = int((h_eye2nose+h_nose2mouse)*0.8+0.5);
+		fy = int(fabs(loadPoint[5]-h_eye2nose*0.8)+0.5);
+
+		if ( (fx>0) && (fy>0) && (fw>0) && (fh>0) && (fx+fw<=width) && (fy+fh<=height) && (fx<fx+fw) && (fy<fy+fh) )
+		{
+			Vec4i nose(fx,fy,fx+fw,fy+fh);
+			FacePoint.push_back(make_pair(Dict_7class[4],nose));
+		}
+		else
+		{
+			printf("nose:w_%d,h_%d,fx_%d,fy_%d,fw_%d,fh_%d\n",width,height,fx,fy,fw,fh);
+		}
+	}
+
+	//count hair
+	{
+		fw = int(w_eye*2.5+0.5);
+		fx = int(fabs(loadPoint[2]+loadPoint[0]-fw)*0.5+0.5);
+		tmp = (loadPoint[1]+loadPoint[3])*0.5-max_h*3;
+		fy = (tmp<1)?1:(int(tmp+0.5));
+		fh = (tmp<1)?(int(max_h*2+0.5)):(int(max_h*2.5+0.5));
+
+		if ( (fx>0) && (fy>0) && (fw>0) && (fh>0) && (fx+fw<=width) && (fy+fh<=height) && (fx<fx+fw) && (fy<fy+fh) )
+		{
+			Vec4i hair(fx,fy,fx+fw,fy+fh);
+			FacePoint.push_back(make_pair(Dict_7class[5],hair));
+		}
+		else
+		{
+			printf("hair:w_%d,h_%d,fx_%d,fy_%d,fw_%d,fh_%d\n",width,height,fx,fy,fw,fh);
+		}
+	}
+
+	//count bread
+	{
+		fw = int(w_eye*2+0.5);
+		fx = int(fabs(loadPoint[6]+loadPoint[8]-fw)*0.5+0.5);
+		fh = int(max_h*1.5+0.5);
+		tmp = (loadPoint[7]+loadPoint[9])*0.5+max_h*1.75;
+		fy = (tmp>height)?(int(height-fh)):(int(tmp-fh+0.5));
+
+		if ( (fx>0) && (fy>0) && (fw>0) && (fh>0) && (fx+fw<=width) && (fy+fh<=height) && (fx<fx+fw) && (fy<fy+fh) )
+		{
+			Vec4i bread(fx,fy,fx+fw,fy+fh);
+			FacePoint.push_back(make_pair(Dict_7class[6],bread));
+		}
+		else
+		{
+			printf("bread:w_%d,h_%d,fx_%d,fy_%d,fw_%d,fh_%d\n",width,height,fx,fy,fw,fh);
+		}
+	}
+
+	return 0;
+}
+
+int API_COMMEN::Rect_IOU(Vec4i rect1, Vec4i rect2, float &iou) 
+{ 
+	if ( (rect1[0]<0)||(rect1[1]<0)||(rect1[0]>rect1[2])||(rect1[1]>rect1[3])||
+		 (rect2[0]<0)||(rect2[1]<0)||(rect2[0]>rect2[2])||(rect2[1]>rect2[3]))
+		return TEC_INVALID_PARAM;
+	
+	float xx1,yy1,xx2,yy2,w,h,tmpArea,area1,area2;
+
+	iou = 0;
+	area1 = (rect1[2]-rect1[0])*(rect1[3]-rect1[1]);
+	area2 = (rect2[2]-rect2[0])*(rect2[3]-rect2[1]);
+	
+	xx1=max(rect1[0],rect2[0]);
+	yy1=max(rect1[1],rect2[1]);
+	xx2=min(rect1[2],rect2[2]);
+	yy2=min(rect1[3],rect2[3]);
+	w=xx2-xx1+1;
+	h=yy2-yy1+1;
+	tmpArea = w*h;
+	if ( (w>0)&&(h>0)&&(tmpArea>0)&&(area1>0)&&(area2>0)&&(area1+area2>tmpArea) )
+	{
+		iou = tmpArea*1.0/(area1+area2-tmpArea);
+	}
+
+	return 0;
+}
 

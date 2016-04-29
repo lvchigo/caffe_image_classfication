@@ -19,10 +19,16 @@
 #include "TErrorCode.h"
 #include "plog/Log.h"
 
-#include "kyheader.h"
+//BING
+//#include "kyheader.h"
+//#include "Objectness_predict.h"
+//#include "ValStructVec.h"
+//#include "CmShow.h"
+//BINGpp
+#include "stdafx.h"
 #include "Objectness_predict.h"
 #include "ValStructVec.h"
-#include "CmShow.h"
+
 
 using namespace cv;
 using namespace std;
@@ -33,9 +39,10 @@ int Get_Bing_ROI( char *szQueryList, char* KeyFilePath, char *layerName, int bin
 	char loadImgPath[256];
 	char szImgPath[256];
 	int i, j, label, svImg, nRet = 0;
-	int topN=20;
+	int topN=15;
 	long inputLabel, nCount;
 	unsigned long long ImageID = 0;
+	string strImageID;
 	double allPredictTime;
 	FILE *fpListFile = 0;
 
@@ -86,11 +93,12 @@ int Get_Bing_ROI( char *szQueryList, char* KeyFilePath, char *layerName, int bin
 			printf("Loaded %ld img...\n",nCount);
 
 		/************************getRandomID*****************************/
-		api_commen.getRandomID( ImageID );
+		//api_commen.getRandomID( ImageID );
 		//ImageID = api_commen.GetIDFromFilePath( loadImgPath );
+		strImageID = api_commen.GetStringIDFromFilePath( loadImgPath );
 
 		/************************ResizeImg*****************************/
-		IplImage* imgResize = api_mainboby.ResizeImg( img );
+		IplImage* imgResize = api_commen.ResizeImg( img );
 
 		/************************Get_Hypothese*****************************/	
 		boxHypothese.clear();
@@ -111,12 +119,13 @@ int Get_Bing_ROI( char *szQueryList, char* KeyFilePath, char *layerName, int bin
 		Mat matImg(imgResize);
 		/************************save img data*****************************/
 		for(i=0;i<boxHypothese.size();i++) 
+		//for(i=0;i<topN;i++) 
 		//for(i=boxTests.size()-1;i>boxTests.size()-1-topN;i--) 
 		{	
 			Scalar color = colors[i%8];
 			rectangle( matImg, cvPoint(boxHypothese[i][0], boxHypothese[i][1]),
 	                   cvPoint(boxHypothese[i][2], boxHypothese[i][3]), color, 3, 8, 0);
-			sprintf(szImgPath, "res_Hypothese/%lld_res.jpg",ImageID);
+			sprintf(szImgPath, "res_Hypothese/%s.jpg",strImageID.c_str());
 			imwrite( szImgPath, matImg );
 		}
 
@@ -199,7 +208,7 @@ int Predict_Hypothese( char *szQueryList, char* KeyFilePath, char *layerName, in
 		//ImageID = api_commen.GetIDFromFilePath( loadImgPath );
 
 		/************************ResizeImg*****************************/
-		IplImage* imgResize = api_mainboby.ResizeImg( img );
+		IplImage* imgResize = api_commen.ResizeImg( img );
 
 		/************************Get_Hypothese*****************************/	
 		run.start();
@@ -662,9 +671,14 @@ int DL_ExtractFeat( char *szQueryList, char *szFeatResult, char *szKeyFiles, cha
 	char DL_ModelFile[1024] = {0};
 	char DL_Meanfile[1024] = {0};
 
+	//vgg-16
 	sprintf(DL_DeployFile, "%s/vgg_16/deploy_vgg_16.prototxt",szKeyFiles);
 	sprintf(DL_ModelFile, "%s/vgg_16/VGG_ILSVRC_16_layers.caffemodel",szKeyFiles);
-	sprintf(DL_Meanfile, "%s/vgg_16/imagenet_mean.binaryproto",szKeyFiles);	//vgg:add 2dcode
+	sprintf(DL_Meanfile, "%s/vgg_16/imagenet_mean.binaryproto",szKeyFiles);
+	//deep-residual-networks-50
+	//sprintf(DL_DeployFile, "%s/deep-residual-networks/ResNet-50-deploy.prototxt",szKeyFiles);
+	//sprintf(DL_ModelFile, "%s/deep-residual-networks/ResNet-50-model.caffemodel",szKeyFiles);
+	//sprintf(DL_Meanfile, "%s/deep-residual-networks/ResNet_mean.binaryproto",szKeyFiles);
 	nRet = api_caffe.Init( DL_DeployFile, DL_ModelFile, DL_Meanfile, layerName, binGPU, deviceID ); 
 	if (nRet != 0)
 	{
@@ -803,11 +817,11 @@ int SVM_Predict( char *szQueryList, char* KeyFilePath, char *layerName, int binG
 	char tPath[256];
 	char loadImgPath[256];
 	char szImgPath[256];
-	string text;
+	string text,strImageID;
 	vector<string> vecText;
-	int i, j, label, svImg, nRet = 0;
+	int i, j, index, label, svImg, nRet = 0;
 	int topN=5;
-	long inputLabel, nCount;
+	long allLabel, nCount, tmpCount;
 	unsigned long long ImageID = 0;
 	double allPredictTime;
 	FILE *fpListFile = 0;
@@ -816,7 +830,15 @@ int SVM_Predict( char *szQueryList, char* KeyFilePath, char *layerName, int binG
 	API_COMMEN api_commen;
 	API_MAINBOBY api_mainboby;
 
+	map<string, long> map_Num_Res_Label;
+	map<string, long>::iterator it_Num_Res_Label;
+
 	vector< pair< pair< string, Vec4i >, float > > Res;
+
+	int bin_two_class_label[2] = {0};	//0-all,1-two other class
+	map< string, int > mapTwClass;
+	map< string, int >::iterator itTwClass;
+	string Dict_6class[6] = {"food","goods","other","people","pet","scene"};
 
 	/***********************************Init**********************************/
 	plog::init(plog::info, "plog.txt"); 
@@ -853,16 +875,14 @@ int SVM_Predict( char *szQueryList, char* KeyFilePath, char *layerName, int binG
 			cvReleaseImage(&img);img = 0;
 			continue;
 		}	
-		nCount++;
-		if( nCount%50 == 0 )
-			printf("Loaded %ld img...\n",nCount);
 
 		/************************getRandomID*****************************/
 		api_commen.getRandomID( ImageID );
+		strImageID = api_commen.GetStringIDFromFilePath(loadImgPath);
 		//ImageID = api_commen.GetIDFromFilePath( loadImgPath );
 
 		/************************ResizeImg*****************************/
-		IplImage* imgResize = api_mainboby.ResizeImg( img );
+		IplImage* imgResize = api_commen.ResizeImg( img );
 
 		/************************Get_Hypothese*****************************/	
 		Res.clear();
@@ -879,8 +899,8 @@ int SVM_Predict( char *szQueryList, char* KeyFilePath, char *layerName, int binG
 		LOOGI<<"[Predict] time:"<<run.time();
 		allPredictTime += run.time();
 
-		Mat matImg(imgResize);
-		/************************save img data*****************************/
+		/************************save one img with muti label*****************************/
+/*		Mat matImg(imgResize);
 		sprintf( tPath, "res_predict/%s/", Res[0].first.first.c_str() );
 		for(i=0;i<Res.size();i++)  
 		{				
@@ -896,9 +916,121 @@ int SVM_Predict( char *szQueryList, char* KeyFilePath, char *layerName, int binG
 				
 			sprintf(tPath, "%s%.2f-%s_", tPath, Res[i].second, Res[i].first.first.c_str() );
 		}
-		sprintf( tPath, "%s%lld.jpg", tPath, ImageID );
-		imwrite( tPath, matImg );
+		sprintf( tPath, "%s%s.jpg", tPath, strImageID.c_str() );
+		imwrite( tPath, matImg );*/
+
+		/************************save muti img with one label*****************************/
+		for(i=0;i<Res.size();i++)  
+		{				
+			IplImage* imgReWrite = cvCloneImage( imgResize );
+			Mat matImg(imgReWrite);
+			Scalar color = colors[i%8];
+			rectangle( matImg, cvPoint(Res[i].first.second[0], Res[i].first.second[1]),
+	                   cvPoint(Res[i].first.second[2], Res[i].first.second[3]), color, 2, 8, 0);
+
+			sprintf(szImgPath, "%.2f %s", Res[i].second, Res[i].first.first.c_str() );
+			text = szImgPath;
+			//putText(matImg, text, cvPoint(Res[i].first.second[0]+1, Res[i].first.second[1]+20), 
+			//	FONT_HERSHEY_SIMPLEX, 0.5, color, 2);
+			putText(matImg, text, cvPoint(1, i*20+20), FONT_HERSHEY_SIMPLEX, 0.5, color, 2);
+				
+			sprintf(tPath, "res_predict/%s/%.2f-%s_%s.jpg", 
+				Res[i].first.first.c_str(),Res[i].second, Res[i].first.first.c_str(),strImageID.c_str() );
+			imwrite( tPath, matImg );
+
+			cvReleaseImage(&imgReWrite);imgReWrite = 0;
+		}
+
+		//find two label
+		if ( Res.size() > 1 )
+		{
+			Mat matImg(imgResize);
+			sprintf( tPath, "res_predict/%s/", Res[0].first.first.c_str() );
+			for(i=0;i<Res.size();i++)  
+			{				
+				Scalar color = colors[i%8];
+				rectangle( matImg, cvPoint(Res[i].first.second[0], Res[i].first.second[1]),
+		                   cvPoint(Res[i].first.second[2], Res[i].first.second[3]), color, 2, 8, 0);
+
+				sprintf(szImgPath, "%.2f %s", Res[i].second, Res[i].first.first.c_str() );
+				text = szImgPath;
+				//putText(matImg, text, cvPoint(Res[i].first.second[0]+1, Res[i].first.second[1]+20), 
+				//	FONT_HERSHEY_SIMPLEX, 0.5, color, 2);
+				putText(matImg, text, cvPoint(1, i*20+20), FONT_HERSHEY_SIMPLEX, 0.5, color, 2);
+					
+				sprintf(tPath, "%s%.2f-%s_", tPath, Res[i].second, Res[i].first.first.c_str() );
+			}
+			
+			index = -1;
+			mapTwClass.clear();
+			for(i=0;i<Res.size();i++)  
+			{	
+				text = Res[i].first.first;
+
+				for(j=0;j<6;j++)  
+				{	
+					index = text.find(Dict_6class[j]);
+					if ( (index!=std::string::npos) && ( index<text.size() ) )
+					{
+						text = Dict_6class[j];
+						break;
+					}		
+				}
+
+				itTwClass = mapTwClass.find(text);
+				if(itTwClass == mapTwClass.end())
+				{
+				    mapTwClass[text] = 1;
+				}
+				else
+				{	
+					mapTwClass[text] = itTwClass->second+1;
+				}
+			}
+
+			bin_two_class_label[0]++;	//0-all,1-two other class
+			if (mapTwClass.size()>1)
+			{
+				bin_two_class_label[1]++;	//0-all,1-two other class
+				
+				printf("ImageID:%s,Size:%d,ClassSize:%d,",strImageID.c_str(),Res.size(),mapTwClass.size());
+				for(i=0;i<Res.size();i++)  
+				{
+					printf( "%s ",Res[i].first.first.c_str() );
+				}
+				printf("\n");
+
+				//two big class
+				sprintf( tPath, "%s%s_two_big_class.jpg", tPath, strImageID.c_str() );
+			}
+			else
+			{
+				//two small class
+				sprintf( tPath, "%s%s_two_small_class.jpg", tPath, strImageID.c_str() );
+			}
+			//imwrite( tPath, matImg );
+
+		}
 		
+		//check data 
+		for(i=0;i<Res.size();i++)  
+		{	
+			text = Res[i].first.first;
+			it_Num_Res_Label = map_Num_Res_Label.find(text);
+			if(it_Num_Res_Label == map_Num_Res_Label.end())
+			{
+			    map_Num_Res_Label[text] = 1;
+			}
+			else
+			{	
+				map_Num_Res_Label[text] = it_Num_Res_Label->second+1;
+			}
+		}
+
+		nCount++;
+		if( nCount%50 == 0 )
+			printf("Loaded %ld img...\n",nCount);
+
 		cvReleaseImage(&imgResize);imgResize = 0;
 		cvReleaseImage(&img);img = 0;
 	}
@@ -913,12 +1045,322 @@ int SVM_Predict( char *szQueryList, char* KeyFilePath, char *layerName, int binG
 	if ( nCount != 0 ) 
 	{
 		printf( "nCount:%ld,PredictTime:%.4fms\n", nCount, allPredictTime*1000.0/nCount );
+
+		//print check data
+		long Num_Check[3] = {0};
+		printf("Label_Num:%d\n",map_Num_Res_Label.size());
+		for(it_Num_Res_Label = map_Num_Res_Label.begin(); it_Num_Res_Label != map_Num_Res_Label.end(); it_Num_Res_Label++)
+		{
+			text = it_Num_Res_Label->first.c_str();
+			printf("%s_%ld\n", text.c_str(), it_Num_Res_Label->second );
+
+			if (text == "other.other.other")
+				Num_Check[0] += it_Num_Res_Label->second;
+			else if ( (text == "food.food.food") || (text == "goods.goods.goods") ||
+				 (text == "people.people.people") ||(text == "pet.pet.pet") || 
+				 (text == "scene.scene.scene") )
+				Num_Check[1] += it_Num_Res_Label->second;
+			else
+				Num_Check[2] += it_Num_Res_Label->second;
+		}
+		printf("\n");
+
+		allLabel = Num_Check[0]+Num_Check[1]+Num_Check[2];
+		printf("AllLabel:%ld,2nd-class-label:%ld_%.2f,1rd-class-label:%ld_%.2f,other:%ld_%.2f\n",
+			allLabel, 	Num_Check[2], Num_Check[2]*100.0/(Num_Check[1]+Num_Check[2]), 
+						Num_Check[1], Num_Check[1]*100.0/(Num_Check[1]+Num_Check[2]), 
+						Num_Check[0], Num_Check[0]*100.0/allLabel );
+
+		printf("AllImage:%ld,two_class_label:%ld_%.2f\n", bin_two_class_label[0], bin_two_class_label[1],
+			bin_two_class_label[1]*100.0/bin_two_class_label[0] );
+		
 	}
 	
 	cout<<"Done!! "<<endl;
 	
 	return nRet;
 }	
+
+int SVM_Predict_shuying( char *szQueryList, char* KeyFilePath, char *layerName, int binGPU, int deviceID )
+{
+	char tPath[256];
+	char loadImgPath[256];
+	char szImgPath[256];
+	string text,strImageID;
+	vector<string> vecText;
+	int i, j, index, label, svImg, rw, rh, nRet = 0;
+	int topN=5;
+	long allLabel, nCount, tmpCount;
+	unsigned long long ImageID = 0;
+	double allPredictTime;
+	FILE *fpListFile = 0;
+
+	RunTimer<double> run;
+	API_COMMEN api_commen;
+	API_MAINBOBY api_mainboby;
+
+	map<string, long> map_Num_Res_Label;
+	map<string, long>::iterator it_Num_Res_Label;
+
+	vector< pair< pair< string, Vec4i >, float > > Res;
+
+	int bin_two_class_label[2] = {0};	//0-all,1-two other class
+	map< string, int > mapTwClass;
+	map< string, int >::iterator itTwClass;
+	string Dict_6class[6] = {"food","goods","other","people","pet","scene"};
+
+	/***********************************Init**********************************/
+	plog::init(plog::info, "plog.txt"); 
+
+	const static Scalar colors[] =  { 	CV_RGB(0,0,255),	CV_RGB(0,255,255),	CV_RGB(0,255,0),	
+										CV_RGB(255,255,0),	CV_RGB(255,0,0),	CV_RGB(255,0,255),
+										CV_RGB(0,128,255), 	CV_RGB(255,128,0)} ;
+	
+	/********************************Open Query List*****************************/
+	fpListFile = fopen(szQueryList,"r");
+	if (!fpListFile) 
+	{
+		cout << "0.can't open " << szQueryList << endl;
+		return TEC_INVALID_PARAM;
+	}
+
+	FILE *fpListFile_shuying = fopen("res_predict/res_facedetect.txt","wt+");
+	if (!fpListFile_shuying) 
+	{
+		cout << "0.can't open " << "res_predict/res_facedetect.txt" << endl;
+		return TEC_INVALID_PARAM;
+	}
+
+	/***********************************Init*************************************/
+	nRet = api_mainboby.Init( KeyFilePath, layerName, binGPU, deviceID ); 
+	if (nRet != 0)
+	{
+	   cout<<"Fail to initialization "<<endl;
+	   return TEC_INVALID_PARAM;
+	}
+
+	nCount = 0;
+	allPredictTime = 0.0;
+	/*****************************Process one by one*****************************/
+	while(EOF != fscanf(fpListFile, "%s", loadImgPath))
+	{
+		IplImage *img = cvLoadImage(loadImgPath);
+		if(!img || (img->width<128) || (img->height<128) || img->nChannels != 3 || img->depth != IPL_DEPTH_8U) 
+		{	
+			cout<<"Can't open " << loadImgPath << endl;
+			cvReleaseImage(&img);img = 0;
+			continue;
+		}	
+
+		/************************getRandomID*****************************/
+		api_commen.getRandomID( ImageID );
+		strImageID = api_commen.GetStringIDFromFilePath(loadImgPath);
+		//ImageID = api_commen.GetIDFromFilePath( loadImgPath );
+
+		/************************ResizeImg*****************************/
+		IplImage* imgResize = api_commen.ResizeImg( img );
+
+		/************************Get_Hypothese*****************************/	
+		Res.clear();
+		run.start();
+		nRet = api_mainboby.Predict( imgResize, ImageID, layerName, Res );
+		if (nRet!=0)
+		{
+			LOOGE<<"[Predict Err!!loadImgPath:]"<<loadImgPath;
+			cvReleaseImage(&img);img = 0;
+			cvReleaseImage(&imgResize);imgResize = 0;
+			continue;
+		}
+		run.end();
+		LOOGI<<"[Predict] time:"<<run.time();
+		allPredictTime += run.time();
+
+		/************************save one img with muti label*****************************/
+		Mat matImg(imgResize);
+		sprintf( tPath, "res_predict/%s/", Res[0].first.first.c_str() );
+		for(i=0;i<Res.size();i++)  
+		{				
+			Scalar color = colors[i%8];
+			rectangle( matImg, cvPoint(Res[i].first.second[0], Res[i].first.second[1]),
+	                   cvPoint(Res[i].first.second[2], Res[i].first.second[3]), color, 2, 8, 0);
+
+			sprintf(szImgPath, "%.2f %s %d", Res[i].second, Res[i].first.first.c_str(), i );
+			text = szImgPath;
+			//putText(matImg, text, cvPoint(Res[i].first.second[0]+1, Res[i].first.second[1]+20), 
+			//	FONT_HERSHEY_SIMPLEX, 0.5, color, 2);
+			putText(matImg, text, cvPoint(1, i*20+20), FONT_HERSHEY_SIMPLEX, 0.5, color, 2);
+
+			rw = Res[i].first.second[2]-Res[i].first.second[0];
+			rh = Res[i].first.second[3]-Res[i].first.second[1];
+			fprintf(fpListFile_shuying, "%s %s %d %.4f %.4f\n", 
+				strImageID.c_str(), Res[i].first.first.c_str(), i, Res[i].second, (rw*rh*1.0/(img->width*img->height)) );
+		}
+		sprintf( tPath, "%s%s.jpg", tPath, strImageID.c_str() );
+		imwrite( tPath, matImg );
+
+		/************************save muti img with one label*****************************/
+/*		for(i=0;i<Res.size();i++)  
+		{				
+			IplImage* imgReWrite = cvCloneImage( imgResize );
+			Mat matImg(imgReWrite);
+			Scalar color = colors[i%8];
+			rectangle( matImg, cvPoint(Res[i].first.second[0], Res[i].first.second[1]),
+	                   cvPoint(Res[i].first.second[2], Res[i].first.second[3]), color, 2, 8, 0);
+
+			sprintf(szImgPath, "%.2f %s", Res[i].second, Res[i].first.first.c_str() );
+			text = szImgPath;
+			//putText(matImg, text, cvPoint(Res[i].first.second[0]+1, Res[i].first.second[1]+20), 
+			//	FONT_HERSHEY_SIMPLEX, 0.5, color, 2);
+			putText(matImg, text, cvPoint(1, i*20+20), FONT_HERSHEY_SIMPLEX, 0.5, color, 2);
+				
+			sprintf(tPath, "res_predict/%s/%.2f-%s_%s.jpg", 
+				Res[i].first.first.c_str(),Res[i].second, Res[i].first.first.c_str(),strImageID.c_str() );
+			imwrite( tPath, matImg );
+
+			cvReleaseImage(&imgReWrite);imgReWrite = 0;
+		}
+*/
+		//find two label
+		if ( Res.size() > 1 )
+		{
+			Mat matImg(imgResize);
+			sprintf( tPath, "res_predict/%s/", Res[0].first.first.c_str() );
+			for(i=0;i<Res.size();i++)  
+			{				
+				Scalar color = colors[i%8];
+				rectangle( matImg, cvPoint(Res[i].first.second[0], Res[i].first.second[1]),
+		                   cvPoint(Res[i].first.second[2], Res[i].first.second[3]), color, 2, 8, 0);
+
+				sprintf(szImgPath, "%.2f %s", Res[i].second, Res[i].first.first.c_str() );
+				text = szImgPath;
+				//putText(matImg, text, cvPoint(Res[i].first.second[0]+1, Res[i].first.second[1]+20), 
+				//	FONT_HERSHEY_SIMPLEX, 0.5, color, 2);
+				putText(matImg, text, cvPoint(1, i*20+20), FONT_HERSHEY_SIMPLEX, 0.5, color, 2);
+					
+				sprintf(tPath, "%s%.2f-%s_", tPath, Res[i].second, Res[i].first.first.c_str() );
+			}
+			
+			index = -1;
+			mapTwClass.clear();
+			for(i=0;i<Res.size();i++)  
+			{	
+				text = Res[i].first.first;
+
+				for(j=0;j<6;j++)  
+				{	
+					index = text.find(Dict_6class[j]);
+					if ( (index!=std::string::npos) && ( index<text.size() ) )
+					{
+						text = Dict_6class[j];
+						break;
+					}		
+				}
+
+				itTwClass = mapTwClass.find(text);
+				if(itTwClass == mapTwClass.end())
+				{
+				    mapTwClass[text] = 1;
+				}
+				else
+				{	
+					mapTwClass[text] = itTwClass->second+1;
+				}
+			}
+
+			bin_two_class_label[0]++;	//0-all,1-two other class
+			if (mapTwClass.size()>1)
+			{
+				bin_two_class_label[1]++;	//0-all,1-two other class
+				
+				printf("ImageID:%s,Size:%d,ClassSize:%d,",strImageID.c_str(),Res.size(),mapTwClass.size());
+				for(i=0;i<Res.size();i++)  
+				{
+					printf( "%s ",Res[i].first.first.c_str() );
+				}
+				printf("\n");
+
+				//two big class
+				sprintf( tPath, "%s%s_two_big_class.jpg", tPath, strImageID.c_str() );
+			}
+			else
+			{
+				//two small class
+				sprintf( tPath, "%s%s_two_small_class.jpg", tPath, strImageID.c_str() );
+			}
+			//imwrite( tPath, matImg );
+
+		}
+		
+		//check data 
+		for(i=0;i<Res.size();i++)  
+		{	
+			text = Res[i].first.first;
+			it_Num_Res_Label = map_Num_Res_Label.find(text);
+			if(it_Num_Res_Label == map_Num_Res_Label.end())
+			{
+			    map_Num_Res_Label[text] = 1;
+			}
+			else
+			{	
+				map_Num_Res_Label[text] = it_Num_Res_Label->second+1;
+			}
+		}
+
+		nCount++;
+		if( nCount%50 == 0 )
+			printf("Loaded %ld img...\n",nCount);
+
+		cvReleaseImage(&imgResize);imgResize = 0;
+		cvReleaseImage(&img);img = 0;
+	}
+
+	/*********************************close file*************************************/
+	if (fpListFile) {fclose(fpListFile);fpListFile = 0;}	
+	if (fpListFile_shuying) {fclose(fpListFile_shuying);fpListFile_shuying = 0;}	
+
+	/*********************************Release*************************************/
+	api_mainboby.Release();
+
+	/*********************************Print Info*********************************/
+	if ( nCount != 0 ) 
+	{
+		printf( "nCount:%ld,PredictTime:%.4fms\n", nCount, allPredictTime*1000.0/nCount );
+
+		//print check data
+		long Num_Check[3] = {0};
+		printf("Label_Num:%d\n",map_Num_Res_Label.size());
+		for(it_Num_Res_Label = map_Num_Res_Label.begin(); it_Num_Res_Label != map_Num_Res_Label.end(); it_Num_Res_Label++)
+		{
+			text = it_Num_Res_Label->first.c_str();
+			printf("%s_%ld\n", text.c_str(), it_Num_Res_Label->second );
+
+			if (text == "other.other.other")
+				Num_Check[0] += it_Num_Res_Label->second;
+			else if ( (text == "food.food.food") || (text == "goods.goods.goods") ||
+				 (text == "people.people.people") ||(text == "pet.pet.pet") || 
+				 (text == "scene.scene.scene") )
+				Num_Check[1] += it_Num_Res_Label->second;
+			else
+				Num_Check[2] += it_Num_Res_Label->second;
+		}
+		printf("\n");
+
+		allLabel = Num_Check[0]+Num_Check[1]+Num_Check[2];
+		printf("AllLabel:%ld,2nd-class-label:%ld_%.2f,1rd-class-label:%ld_%.2f,other:%ld_%.2f\n",
+			allLabel, 	Num_Check[2], Num_Check[2]*100.0/(Num_Check[1]+Num_Check[2]), 
+						Num_Check[1], Num_Check[1]*100.0/(Num_Check[1]+Num_Check[2]), 
+						Num_Check[0], Num_Check[0]*100.0/allLabel );
+
+		printf("AllImage:%ld,two_class_label:%ld_%.2f\n", bin_two_class_label[0], bin_two_class_label[1],
+			bin_two_class_label[1]*100.0/bin_two_class_label[0] );
+		
+	}
+	
+	cout<<"Done!! "<<endl;
+	
+	return nRet;
+}	
+
 
 int main(int argc, char* argv[])
 {
@@ -949,6 +1391,9 @@ int main(int argc, char* argv[])
 	else if (argc == 7 && strcmp(argv[1],"-predict") == 0) {
 		ret = SVM_Predict( argv[2], argv[3], argv[4], atol(argv[5]), atol(argv[6]) );
 	}
+	else if (argc == 7 && strcmp(argv[1],"-predict_shuying") == 0) {
+		ret = SVM_Predict_shuying( argv[2], argv[3], argv[4], atol(argv[5]), atol(argv[6]) );
+	}
 	else
 	{
 		cout << "usage:\n" << endl;
@@ -959,6 +1404,7 @@ int main(int argc, char* argv[])
 		cout << "\tDemo_mainboby -get_fineturn_sample queryList.txt svImagePath label\n" << endl;
 		cout << "\tDemo_mainboby -extract queryList.txt szFeat keyFilePath layerName binGPU deviceID\n" << endl;
 		cout << "\tDemo_mainboby -predict queryList.txt keyFilePath layerName binGPU deviceID\n" << endl;
+		cout << "\tDemo_mainboby -predict_shuying queryList.txt keyFilePath layerName binGPU deviceID\n" << endl;
 		return ret;
 	}
 	return ret;

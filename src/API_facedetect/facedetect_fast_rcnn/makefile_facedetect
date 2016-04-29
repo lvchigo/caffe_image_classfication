@@ -1,0 +1,143 @@
+
+# compiler
+CXX :=g++ -Wall -w -O3 -msse2 -fPIC -ggdb -pthread -std=c++11 -fopenmp
+CC :=gcc -Wall -w -O3 -msse2 -fPIC -ggdb -pthread -std=c++11 -fopenmp
+CUDACC :=nvcc -O3
+
+#CXX :=g++ -fPIC 
+#CC :=gcc -fPIC 
+
+#shared library
+SFLAG := -fPIC -shared
+
+###### target and sources
+# sources
+
+CAFFE_DIR = ../src/API_caffe/v1.1.0
+CAFFE_INC = -I$(CAFFE_DIR) -I$(CAFFE_DIR)/include
+CAFFE_SRC = $(CAFFE_DIR)/src/chnsFunctions.cpp \
+		$(CAFFE_DIR)/src/clothxml_reader.cpp \
+		$(CAFFE_DIR)/src/edgeBoxes.cpp \
+		$(CAFFE_DIR)/src/edgesDetect.cpp \
+		$(CAFFE_DIR)/src/edgesNms.cpp \
+		$(CAFFE_DIR)/src/FastRCNN.cpp \
+		$(CAFFE_DIR)/src/model.cpp \
+		$(CAFFE_DIR)/src/readMapping.cpp \
+		$(CAFFE_DIR)/src/SceneFeatures.cpp \
+		$(CAFFE_DIR)/src/structureEdge.cpp \
+		$(CAFFE_DIR)/API_caffe.cpp
+CAFFE_LIB = -L$(CAFFE_DIR)/lib
+#		$(CAFFE_DIR)/src/tinyxml2.cpp \
+
+COMMEN_DIR = ../src/API_commen
+COMMEN_INC = -I$(COMMEN_DIR)
+COMMEN_SRC = $(COMMEN_DIR)/API_commen.cpp
+
+PLOG_DIR = ../src/API_plog
+PLOG_INC = -I$(PLOG_DIR)
+
+XML_DIR = ../src/API_xml
+XML_INC = -I$(XML_DIR)
+XML_SRC = $(XML_DIR)/tinyxml2.cpp $(XML_DIR)/API_xml.cpp
+
+LINEARSVM_DIR = ../src/API_linearsvm
+LINEARSVM_INC = -I$(LINEARSVM_DIR)
+LINEARSVM_SRC = $(LINEARSVM_DIR)/tron.cpp $(LINEARSVM_DIR)/linear.cpp $(LINEARSVM_DIR)/API_linearsvm.cpp
+#LINEARSVM_LIB = $(LINEARSVM_DIR)/blas.a
+
+PROPOSAL_DIR = ../src/API_proposal
+PROPOSAL_INC = 	-I$(PROPOSAL_DIR) \
+		-I$(PROPOSAL_DIR)/BINGpp -I$(PROPOSAL_DIR)/BINGpp/include \
+		-I$(PROPOSAL_DIR)/BINGpp/include/FelzenSegment \
+		-I$(PROPOSAL_DIR)/BINGpp/include/gSLIC_Lib \
+		-I$(PROPOSAL_DIR)/BINGpp/include/gSLIC_Lib/engines \
+		-I$(PROPOSAL_DIR)/BINGpp/include/gSLIC_Lib/objects \
+		-I$(PROPOSAL_DIR)/BINGpp/include/ORUtils \
+		-I$(PROPOSAL_DIR)/BINGpp/include/vl 
+PROPOSAL_SRC =  $(PROPOSAL_DIR)/BINGpp/CmFile.cpp \
+		$(PROPOSAL_DIR)/BINGpp/CmShow.cpp \
+		$(PROPOSAL_DIR)/BINGpp/DataSetVOC.cpp \
+		$(PROPOSAL_DIR)/BINGpp/FilterBING.cpp \
+		$(PROPOSAL_DIR)/BINGpp/mtse.cpp \
+		$(PROPOSAL_DIR)/BINGpp/stdafx.cpp \
+		$(PROPOSAL_DIR)/BINGpp/include/gSLIC_Lib/engines/gSLIC_core_engine.cpp \
+		$(PROPOSAL_DIR)/BINGpp/include/gSLIC_Lib/engines/gSLIC_seg_engine.cpp \
+		$(PROPOSAL_DIR)/BINGpp/Objectness_predict.cpp
+PROPOSAL_CUDA_DIR = $(PROPOSAL_DIR)/BINGpp/include/gSLIC_Lib/engines
+PROPOSAL_CUDA_SRC = $(PROPOSAL_CUDA_DIR)/gSLIC_seg_engine_GPU.cu
+PROPOSAL_LIB = -L$(PROPOSAL_DIR)/BINGpp/lib
+
+FACEDETECT_DIR = ../src/API_facedetect
+FACEDETECT_INC = -I$(FACEDETECT_DIR)
+FACEDETECT_SRC = $(FACEDETECT_DIR)/API_facedetect.cpp
+
+# include && lib
+INCLUDE = -I/usr/local/include/opencv -I/usr/local/include/opencv2 -I/usr/local/include -I/usr/local/cuda/include
+LIBARAY = -L../lib -L/usr/local/lib -L/usr/local/cuda/lib64 -L/usr/lib
+LIBARAY += $(CAFFE_LIB) $(PROPOSAL_LIB)
+#LIBARAY += $(LINEARSVM_LIB)
+
+# flags
+CFLAGS =  -fopenmp  -DHAVE_JPEG -DHAVE_PNG
+CXXFLAGS = -fopenmp  -DHAVE_JPEG -DHAVE_PNG \
+	$(CAFFE_INC) $(COMMEN_INC) $(PLOG_INC) $(XML_INC) $(LINEARSVM_INC) $(PROPOSAL_INC) $(FACEDETECT_INC) $(INCLUDE) 
+CUDACXXFLAGS = -DHAVE_JPEG -DHAVE_PNG \
+	$(CAFFE_INC) $(COMMEN_INC) $(PLOG_INC) $(XML_INC) $(LINEARSVM_INC) $(PROPOSAL_INC) $(FACEDETECT_INC) $(INCLUDE) 
+
+LDFLAGS  = -lm -lpthread -lopencv_core -lopencv_highgui -lopencv_imgproc -lopencv_ml
+LDFLAGS  += -lcublas_device -lcublas -lcudadevrt -lcudart  -lcufft -lcufftw -lculibos -lcurand -lcusparse -lnppc -lnppi -lnpps 
+LDFLAGS  += -ldl -lrt -ljpeg -lpng  -lz -lcurl -lstdc++ -lglog -lcaffe -lvl
+LDFLAGS  += -lopenblas
+
+SRCS =  $(COMMEN_SRC) $(CAFFE_SRC) $(XML_SRC) $(LINEARSVM_SRC) $(PROPOSAL_SRC) $(FACEDETECT_SRC)
+OBJS = $(SRCS:%.cpp=%.o)
+CUDASRCS = $(PROPOSAL_CUDA_SRC) 
+CUDAOBJS = $(CUDASRCS:%.cu=%.o) 
+OBJECTS = $(OBJS) $(CUDAOBJS)
+
+# BIN && LIB
+BIN = ../bin
+LIB = ../lib
+
+###### generation rules
+#.SUFFIXES: .cpp .c .o .so .a .d
+.c.o:
+	@echo ----------------------------------------------
+	$(CC) $(CFLAGS) -c $< -o $@
+	@echo ----------------------------------------------
+
+.cpp.o:
+	@echo ----------------------------------------------
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+	@echo ----------------------------------------------
+
+$(PROPOSAL_CUDA_DIR)/%.o : $(PROPOSAL_CUDA_DIR)/%.cu
+	@echo ----------------------------------------------
+	$(CUDACC) -arch=sm_20 $(CUDACXXFLAGS) -Xcompiler '-fPIC -fopenmp' -c $< -o $@ 
+	@echo ----------------------------------------------
+
+###### main
+#.PHONY : all 
+all: lib Demo_facedetect
+
+#deps: $(addprefix $(OBJSPATH),$(DEPS))
+Demo_facedetect:$(BIN) $(LIB) $(OBJECTS) Demo_facedetect.cpp
+	@echo ----------------------------------------------
+	$(CXX) $(CXXFLAGS) Demo_facedetect.cpp  -o $(BIN)/Demo_facedetect -lfacedetect $(LIBARAY) $(LDFLAGS) 
+	@echo ----------------------------------------------
+
+lib: $(LIB) $(OBJECTS)
+	@echo ----------------------------------------------
+	$(CXX) $(CXXFLAGS) -shared -o -fPIC -o $(LIB)/libfacedetect.so $(OBJECTS) $(LIBARAY) $(LDFLAGS)
+	@echo ----------------------------------------------
+
+clean:
+	rm -f $(OBJECTS)
+	rm -f $(TARGET)
+	rm $(LIB)/libfacedetect.so
+	rm -f *.o 
+	rm $(BIN)/Demo_facedetect
+
+rebuild: clean all
+install:
+	install -T $(TARGET) $(INSTALL_PATH)/bin/$(TARGET)
