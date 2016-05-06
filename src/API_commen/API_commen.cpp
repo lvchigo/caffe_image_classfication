@@ -298,7 +298,8 @@ int API_COMMEN::Img_GetMutiRoi( IplImage *MainBody, UInt64 ImageID, vector<Mat_<
 		cvResize( MutiROI, MutiROIResize );
 		
 		/*****************************push data*****************************/
-		Mat matResize( MutiROIResize );
+		//Mat matResize( MutiROIResize );
+		Mat matResize = cv::cvarrToMat(MutiROIResize);
 		OutputImg.push_back( matResize );
 		
 		/*****************************save tmp data*****************************/		
@@ -392,7 +393,8 @@ int API_COMMEN::Img_GetMutiRoi_ImageQuality( IplImage *MainBody, UInt64 ImageID,
 			//if ( (x+y)%2 == 0 )
 			if ( ( (x+y)%2 == 1 ) || ( (x==1) && (y==1) ) )
 			{
-				Mat matResize( MutiROI );
+				//Mat matResize( MutiROI );
+				Mat matResize = cv::cvarrToMat(MutiROI);
 				OutputImg.push_back( matResize );
 			}
 
@@ -430,7 +432,8 @@ int API_COMMEN::Img_GetMutiRoi_ImageQuality( IplImage *MainBody, UInt64 ImageID,
 		cvResetImageROI(imgResize);	
 
 		/*****************************push data*****************************/
-		Mat matResize( MutiROI, 1 );
+		//Mat matResize( MutiROI, 1 );
+		Mat matResize = cv::cvarrToMat(MutiROI);
 		OutputImg.push_back( matResize );
 
 		/*****************************save tmp data*****************************/		
@@ -481,7 +484,8 @@ void API_COMMEN::Img_Get10MutiRoi( IplImage *MainBody, UInt64 ImageID, vector<Ma
 		cvResize( MutiROI, MutiROIResize );
 		
 		/*****************************push data*****************************/
-		Mat matResize( MutiROIResize );
+		//Mat matResize( MutiROIResize );
+		Mat matResize = cv::cvarrToMat(MutiROIResize);
 		OutputImg.push_back( matResize );
 		
 		Mat mat_hMirrorTrans;
@@ -544,7 +548,9 @@ IplImage* API_COMMEN::ResizeImg( IplImage *img, float &ratio, int MaxLen )
 			ratio = MaxLen*1.0 / img->height;
 	}
 	rWidth =  (int )img->width * ratio;
+	rWidth = (((rWidth + 3) >> 2) << 2);	//width 4 char
 	rHeight = (int )img->height * ratio;
+	rHeight = (((rHeight + 3) >> 2) << 2);	//rHeight 4 char
 
 	IplImage *imgResize = cvCreateImage(cvSize(rWidth, rHeight), img->depth, img->nChannels);
 	cvResize( img, imgResize );

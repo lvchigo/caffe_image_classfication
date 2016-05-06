@@ -119,7 +119,7 @@ int API_CAFFE_FasterRCNN::Init(
 	net_dl.reset(new caffe::Net<float>(DL_DeployFile, caffe::TEST));
 	net_dl->CopyTrainedLayersFrom( DL_ModelFile );			// load model
 	if ( !net_dl->has_blob( strLayerName ) ) {
-		printf("Unknown label name:%s in the network.\n",strLayerName.c_str());
+		LOOGE<<"[Unknown label name:%s in the network!!]";
 		return TEC_INVALID_PARAM;
 	}
 	
@@ -138,22 +138,15 @@ int API_CAFFE_FasterRCNN::Predict(
 		return TEC_INVALID_PARAM;
 	}
 
-	//load image
-    cv::Mat cv_img(image);
-    if(cv_img.empty())
-    {
-        LOOGE<<"[Predict]:input err!!";
-		return TEC_INVALID_PARAM;
-    }
-
 	//init
 	float tmpScore;
 	float MaxLabel_THRESH = 0.5;
     float NMS_THRESH = 0.3;			//[0.2,0.3,0.4]
 	float CONF_THRESH = Min_T;		//0.8
+	float iter_loss = 0.0;
 
 	float im_info[3] = {0};
-    int i,j,k,height,width,tmp,nRet = 0;
+    int i,j,k,w,h,height,width,DataSize,tmp,nRet = 0;
 
 	vector< NmsInfo > vecNMSInfo;
 	vector< RectInfo > vecRectInfo;
@@ -163,33 +156,57 @@ int API_CAFFE_FasterRCNN::Predict(
 	vecResInfo.clear();
 
 	/*****************************Change Data****************************/
-    height = cv_img.rows;
-    width = cv_img.cols;
-	float* data_buf = new float[height*width*3];
-	for (int h = 0; h < cv_img.rows; ++h )
-    {
-        for (int w = 0; w < cv_img.cols; ++w)
-        {   
-            data_buf[(0*height+h)*width+w] = float(cv_img.at<cv::Vec3b>(cv::Point(w, h))[0])-float(102.9801);
-            data_buf[(1*height+h)*width+w] = float(cv_img.at<cv::Vec3b>(cv::Point(w, h))[1])-float(115.9465);
-            data_buf[(2*height+h)*width+w] = float(cv_img.at<cv::Vec3b>(cv::Point(w, h))[2])-float(122.7717);
-
+	height = image->height;
+    width = image->width;
+	DataSize = height*width*3;
+	float* data_buf = new float[DataSize];
+    for ( h = 0; h < height; ++h) {
+        for ( w = 0; w < width; ++w) {
+			data_buf[(         h)*width+w] = (float)((uchar*)(image->imageData + image->widthStep*h))[w*3  ]-float(102.9801);
+            data_buf[(1*height+h)*width+w] = (float)((uchar*)(image->imageData + image->widthStep*h))[w*3+1]-float(115.9465);
+            data_buf[(2*height+h)*width+w] = (float)((uchar*)(image->imageData + image->widthStep*h))[w*3+2]-float(122.7717);
         }
-    }   
-    im_info[0] = cv_img.rows;
-    im_info[1] = cv_img.cols;
+    }
+    im_info[0] = height;
+    im_info[1] = width;
     im_info[2] = 1.0;	//scale
 
-	/*****************************Input Data****************************/
-    net_dl->blob_by_name("data")->Reshape(1, 3, height, width);
-    net_dl->blob_by_name("data")->set_cpu_data(data_buf);
-    net_dl->blob_by_name("im_info")->set_cpu_data(im_info);
+	std::vector<Blob<float>*> input_blobs; 
+	input_blobs = net_dl->input_blobs();
+	if (input_blobs.size()<1 )
+	{
+		printf("input_blobs err!!");
+		if(data_buf != NULL){ delete[] data_buf; data_buf = NULL;}
+		return TEC_INVALID_PARAM;
+	}
+
+	//copy data
+	if ( input_blobs[0]->count() != DataSize )
+	{
+		input_blobs[0]->Reshape(1, 3, height, width);
+	}
+	caffe_copy(input_blobs[0]->count(), data_buf, input_blobs[0]->mutable_cpu_data());
+	caffe_copy(input_blobs[1]->count(), im_info, input_blobs[1]->mutable_cpu_data());
 
 	/*****************************Forward Model****************************/
-	//std::vector<Blob<float>*> input_vec; 
-	//net_dl->Forward(input_vec);
-	vector<Blob<float>*> output_blobs;
-	output_blobs = net_dl->ForwardPrefilled();
+	std::vector<Blob<float>*> output_blobs;
+	try
+	{
+		output_blobs = net_dl->Forward(input_blobs,&iter_loss);
+		if (output_blobs.size()<1)
+		{
+			LOOGE<<"[net_dl->ForwardPrefilled() err~~!!]";
+			throw 1;
+		}
+	}
+	catch(...)
+	{
+		if(data_buf != NULL){ delete[] data_buf; data_buf = NULL;}
+		return TEC_BAD_STATE;
+	}
+
+	//delete
+	if(data_buf != NULL){ delete[] data_buf; data_buf = NULL;}
 
 	/*****************************Get Output Data*****************************/
 	caffe::shared_ptr<caffe::Blob<float> > cls_blob;
@@ -209,7 +226,6 @@ int API_CAFFE_FasterRCNN::Predict(
 	{
 		printf("[Predict]:cls_batch_size = %d, bbox_batch_size = %d, roi_batch_size = %d, err!!\n", 
 				cls_batch_size, bbox_batch_size, roi_batch_size);	
-		if(data_buf != NULL){ delete[] data_buf; data_buf = NULL;}
 		return TEC_BAD_STATE;
 	}
 	
@@ -221,7 +237,6 @@ int API_CAFFE_FasterRCNN::Predict(
 	{
 		printf("[Predict]:cls_dim_features = %d, bbox_dim_features = %d, roi_dim_features = %d, err!!\n", 
 				cls_dim_features, bbox_dim_features,roi_dim_features);	
-		if(data_buf != NULL){ delete[] data_buf; data_buf = NULL;}
 		return TEC_BAD_STATE;
 	}
 
@@ -295,7 +310,6 @@ int API_CAFFE_FasterRCNN::Predict(
 		vecResInfo.push_back( info );
 		
 		//LOOGE<<"[Predict]:vecRectInfo.size()<1!!";
-		if(data_buf != NULL){ delete[] data_buf; data_buf = NULL;}
 		return 0;
 	}
 
@@ -305,7 +319,6 @@ int API_CAFFE_FasterRCNN::Predict(
 	if ( (nRet!=0) || (vecRectRegressionInfo.size()<1) )
 	{
 		LOOGE<<"[Predict]:bbox_regression Err!!";
-		if(data_buf != NULL){ delete[] data_buf; data_buf = NULL;}
 		return TEC_BAD_STATE;
 	}
 
@@ -341,7 +354,6 @@ int API_CAFFE_FasterRCNN::Predict(
 			if ( (nRet!=0) || (vecBBoxNMSOutput.size()<1) )
 			{
 				LOOGE<<"[Predict]:bbox_NMS Err!!";
-				if(data_buf != NULL){ delete[] data_buf; data_buf = NULL;}
 				return TEC_BAD_STATE;
 			}
 
@@ -356,9 +368,6 @@ int API_CAFFE_FasterRCNN::Predict(
 			vecRectRegressionInfo.erase(vecRectRegressionInfo.begin()+suppress[j]);
 		}
 	}
-
-	//delete
-	if(data_buf != NULL){ delete[] data_buf; data_buf = NULL;}
 
 	return nRet;
 }
@@ -445,6 +454,10 @@ int API_CAFFE_FasterRCNN::bbox_NMS(vector<FasterRCNNInfo> src, vector<FasterRCNN
 		s[i].y2=src[i].rect[3];
 		s[i].area=(src[i].rect[2]-src[i].rect[0]+1)*(src[i].rect[3]-src[i].rect[1]+1);
 	}
+	
+	if (s.size()<1)
+		return TEC_INVALID_PARAM;
+	
 	std::sort(s.begin(),s.end(),rindcom);
 
 	tmp = 0;
@@ -486,9 +499,15 @@ int API_CAFFE_FasterRCNN::bbox_NMS(vector<FasterRCNNInfo> src, vector<FasterRCNN
 	if (!dst.empty())
 		dst.clear();
 
+	if (pick.size()<1)
+		return TEC_INVALID_PARAM;
+
 	for (i=0;i<pick.size();i++) {
 		dst.push_back(src[pick[i]]);
 	}
+
+	if (dst.size()<1)
+		return TEC_INVALID_PARAM;
 
 	std::sort(dst.begin(),dst.end(),Sort_FasterRCNNInfo);
 

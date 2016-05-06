@@ -117,14 +117,14 @@ int API_FACE_ANNOATION::Init(
 
 	/***********************************Load image**********************************/
 	imgMean = cvLoadImage(tPath3);
-	if(!imgMean || (imgMean->width!=BLOB_WIDTH) || (imgMean->height!=BLOB_HEIGHT) || imgMean->nChannels != CHANNEL ) 
+	if(!imgMean || (imgMean->width!=FACE_BLOB_WIDTH) || (imgMean->height!=FACE_BLOB_HEIGHT) || imgMean->nChannels != CHANNEL ) 
 	{	
 		LOOGE<<"[API_FACE_ANNOATION::Init:imgMean Err]";
 	   	return TEC_INVALID_PARAM;
 	}	
 
 	imgSTD = cvLoadImage(tPath4);
-	if(!imgSTD || (imgSTD->width!=BLOB_WIDTH) || (imgSTD->height!=BLOB_HEIGHT) || imgSTD->nChannels != CHANNEL ) 
+	if(!imgSTD || (imgSTD->width!=FACE_BLOB_WIDTH) || (imgSTD->height!=FACE_BLOB_HEIGHT) || imgSTD->nChannels != CHANNEL ) 
 	{	
 		LOOGE<<"[API_FACE_ANNOATION::Init:imgSTD Err]";
 	   	return TEC_INVALID_PARAM;
@@ -145,13 +145,10 @@ int API_FACE_ANNOATION::ReadImageToBlob( IplImage *image, Blob<float>& image_blo
 	float tmp,mean,std;
 	float* dto= image_blob.mutable_cpu_data();
     float* d_diff = image_blob.mutable_cpu_diff();
-	
-	int w_off = int( (WIDTH - BLOB_WIDTH)*0.5 );
-	int h_off = int( (HEIGHT - BLOB_HEIGHT)*0.5 );
 
     for ( c = 0; c < CHANNEL; ++c) {
-        for ( h = 0; h < BLOB_HEIGHT; ++h) {
-            for ( w = 0; w < BLOB_WIDTH; ++w) {
+        for ( h = 0; h < FACE_BLOB_HEIGHT; ++h) {
+            for ( w = 0; w < FACE_BLOB_WIDTH; ++w) {
 				tmp = (float)((uchar*)(image->imageData + image->widthStep*h))[w*3+c];
 				mean = (float)((uchar*)(imgMean->imageData + imgMean->widthStep*h))[w*3+c];
 				std = (float)((uchar*)(imgSTD->imageData + imgSTD->widthStep*h))[w*3+c];
@@ -227,11 +224,11 @@ int API_FACE_ANNOATION::Predict(
 		cvResetImageROI(image);	
 		
 		/*****************************Resize Img*****************************/
-		IplImage *MutiROIResize = cvCreateImage(cvSize(BLOB_WIDTH, BLOB_HEIGHT), MutiROI->depth, MutiROI->nChannels);
+		IplImage *MutiROIResize = cvCreateImage(cvSize(FACE_BLOB_WIDTH, FACE_BLOB_HEIGHT), MutiROI->depth, MutiROI->nChannels);
 		cvResize( MutiROI, MutiROIResize );
 
 		/*****************************load source*****************************/
-		Blob<float> image_blob( 1, CHANNEL, BLOB_WIDTH, BLOB_HEIGHT ); // input 
+		Blob<float> image_blob( 1, CHANNEL, FACE_BLOB_WIDTH, FACE_BLOB_HEIGHT ); // input 
 		if ( ReadImageToBlob( MutiROIResize, image_blob  ) )
 		{
 			LOOGE<<"[API_FACE_ANNOATION::Predict:ReadImageToBlob Err!!]";

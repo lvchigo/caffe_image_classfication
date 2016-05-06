@@ -245,6 +245,11 @@ int API_FACE_DETECT::Merge(
 		}
 	}
 
+	if ( inFaceInfo.size() < 1 ) 
+	{ 
+		return TEC_INVALID_PARAM;
+	}	
+
 	/***********************************Fix_PartFace**********************************/
 	vector<FaceDetectInfo>	vecFixFace;
 	{
@@ -331,8 +336,8 @@ int API_FACE_DETECT::Filter_Face(
 		vector< FaceDetectInfo > 		vecPartFace,
 		int 							&bin_sv)
 {
-	bin_sv = 0;
-	if ( vecPartFace.size() < 2 ) 
+	bin_sv = 0; 
+	if ( vecPartFace.size() < 2 )
 		return TOK;
 
 	//init
@@ -399,7 +404,9 @@ int API_FACE_DETECT::Fix_AddRect_Face(
 			ratio = maxLen*1.0 / image->height;
 	}
 	rWidth =  (int )image->width * ratio;
+	rWidth = (((rWidth + 3) >> 2) << 2);	//width 4 char
 	rHeight = (int )image->height * ratio;
+	rHeight = (((rHeight + 3) >> 2) << 2);	//rHeight 4 char
 	IplImage *img_resize = cvCreateImage(cvSize(rWidth, rHeight), image->depth, image->nChannels);
 	cvResize(image, img_resize);
 
@@ -637,23 +644,29 @@ int API_FACE_DETECT::Fix_AddRect_PartFace(
 		int binHalfFaceMode;	//1-Half Face,2-only Eye Face,3-only mouse Face
 		int	inX1,inX2;			//only for BinMode=2-Part Face
 		int	inWidth;			//only for BinMode=2-Part Face
-	
+		
 		inFaceInfo.clear();
-		if ( ( nPartCount[0]>0 ) && ( nPartCount[1]==0 ) && ( nPartCount[2]==0 ) ) //only eye
+		if ( ( nPartCount[0]>0 ) && ( nPartCount[1]==0 ) && ( nPartCount[2]==0 ) && 
+			 ( vecHairFace.size()>0 ) && ( vecEyeFace.size()>0 ) ) //only eye
 		{
 			binHalfFaceMode = 2;	//1-Half Face,2-only Eye Face,3-only mouse Face
 			inX1 = std::min(vecHairFace[0].rect[0],vecEyeFace[0].rect[0]);
 			inX2 = std::max(vecHairFace[0].rect[2],vecEyeFace[0].rect[2]);
-			inWidth = abs(inX2-inX1);
+			inWidth = std::abs(inX2-inX1);
 			inFaceInfo.assign( vecEyeFace.begin(), vecEyeFace.end() );
 		}
-		else if ( ( nPartCount[0]==0 ) && ( nPartCount[1]==0 ) && ( nPartCount[2]>0 ) ) //only mouse
+		else if ( ( nPartCount[0]==0 ) && ( nPartCount[1]==0 ) && ( nPartCount[2]>0 ) &&
+				  ( vecBeardFace.size()>0 ) && ( vecMouseFace.size()>0 ) ) //only mouse
 		{
 			binHalfFaceMode = 3;	//1-Half Face,2-only Eye Face,3-only mouse Face
 			inX1 = std::min(vecBeardFace[0].rect[0],vecMouseFace[0].rect[0]);
 			inX2 = std::max(vecBeardFace[0].rect[2],vecMouseFace[0].rect[2]);
-			inWidth = abs(inX2-inX1);
+			inWidth = std::abs(inX2-inX1);
 			inFaceInfo.assign( vecMouseFace.begin(), vecMouseFace.end() );
+		}
+		else
+		{
+			return TOK;
 		}
 
 		/***********************************Fix_AddRect**********************************/
@@ -867,7 +880,7 @@ int API_FACE_DETECT::Fix_PartFace(
 	//no two Part face
 	if (vecPartFace.size()<2)
 		return TOK;
-
+	
 	//judge Part face belong to other Part face or not
 	vecRemovePartFace.clear();
 	for(i=0;i<vecPartFace.size();i++)

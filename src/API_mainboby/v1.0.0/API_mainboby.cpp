@@ -621,7 +621,8 @@ int API_MAINBOBY::Get_Bing_Hypothese( IplImage *img, vector< pair<float, Vec4i> 
 
 	/************************getObjBndBoxes*****************************/
 	ValStructVec<float, Vec4i> inBox;
-	Mat matImg(img);
+	//Mat matImg(img);
+	Mat matImg = cv::cvarrToMat(img);
 	inBox.clear();
 	inBox.reserve(10000);
 	
@@ -796,7 +797,8 @@ int API_MAINBOBY::Get_Hypothese( IplImage *img, ValStructVec<float, Vec4i> &outB
 
 	/************************getObjBndBoxes*****************************/
 	ValStructVec<float, Vec4i> inBox;
-	Mat matImg(img);
+	//Mat matImg(img);
+	Mat matImg = cv::cvarrToMat(img);
 	inBox.clear();
 	inBox.reserve(10000);
 	
@@ -1052,7 +1054,8 @@ int API_MAINBOBY::Get_Hypothese_Entropy( IplImage *img, UInt64 ImageID, ValStruc
 		IplImage* grayResize = cvCreateImage(cvGetSize(imgResize), MutiROI->depth, 1 );
 		cvCvtColor(imgResize, grayResize, CV_BGR2GRAY); 
 
-		Mat matGray(grayResize);
+		//Mat matGray(grayResize);
+		Mat matGray = cv::cvarrToMat(grayResize);
 	    
 		//ExtractFeat_Entropy
 		Entropy = ExtractFeat_Entropy_cell( matGray );

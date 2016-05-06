@@ -45,8 +45,8 @@ class API_FACE_ANNOATION
 {
 
 /***********************************Common***********************************/
-#define BLOB_WIDTH 40	
-#define BLOB_HEIGHT 40
+#define FACE_BLOB_WIDTH 40	
+#define FACE_BLOB_HEIGHT 40
 #define CHANNEL 3
 
 /***********************************public***********************************/
