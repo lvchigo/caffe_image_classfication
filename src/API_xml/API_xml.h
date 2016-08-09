@@ -49,7 +49,14 @@ public:
 	int load_xml( string loadXml, string &ImageID, vector< pair< string, Vec4i > > &vecLabelRect );
 	
 	int write_xml( string ImageID, string xmlSavePath, vector< pair< string, Vec4i > > vecLabelRect );
-	
+
+	/***********************************find NameNode IsExist or not*************************************/
+	int find_name( string loadXml, string FindName, string &ImageID, int &IsExist );
+
+	/***********************************change label*************************************/
+	int change_label( string loadXml, map<string, string> chLabel, string svPath );
+
+	/***********************************Get_Xml_Hypothese*************************************/
 	int Get_Xml_Hypothese( 
 		string ImageID, int width, int height, 
 		vector< pair< string, Vec4i > > vecLabelRect, 

@@ -1,0 +1,9 @@
+from fast_rcnn.config import cfg
+
+def SetGPU(binGPU, deviceID):
+    print "/*****************************/"
+    print "Init_Python SetGPU:", cfg.GPU_ID
+    print "/*****************************/"
+    cfg.GPU_ID = deviceID
+    print "Init_Python SetGPU:", cfg.GPU_ID
+    print "/*****************************/"

@@ -269,6 +269,165 @@ int API_XML::write_xml( string ImageID, string xmlSavePath, vector< pair< string
 	return 0;
 }
 
+int API_XML::find_name( string loadXml, string FindName, string &ImageID, int &IsExist )
+{
+	char tPath[256];
+	char szImgPath[256];
+	int i, j, svImg, nRet = 0;
+	unsigned long long nCount, labelCount;
+
+	/********************************Init*****************************/
+	string strLabel;
+	string tmpPath,iid;
+	long end = 0;
+
+	/********************************reading the xml files*****************************/
+	XMLDocument doc;
+	XMLError eResult = doc.LoadFile(const_cast<char*>(loadXml.c_str()));
+	if (eResult != XML_SUCCESS) {
+		cout<<"Error opening the xml files! "<<loadXml<<endl;
+		return TEC_INVALID_PARAM;
+	}
+
+	XMLNode* pRoot = doc.FirstChildElement("annotation");
+	if (pRoot == nullptr) {
+		cout<<"No annotation available!"<<endl;
+		return TEC_INVALID_PARAM;
+	}
+	
+	XMLElement* pNameElement = pRoot->FirstChildElement("filename");
+	if (pNameElement == nullptr) {
+		cout<<"No filename here!"<<endl;
+		return TEC_INVALID_PARAM;
+	}
+
+	//read name 
+	const char * Name = pNameElement->GetText();
+	//printf("Name:%s\n",Name);
+
+	ImageID = Name;
+	//printf("before ImageID:%s\n",ImageID.c_str());
+	std::size_t found = ImageID.find(".jpg");
+	if ( (found!=std::string::npos) && (found>0) )
+	{
+		end = 0;
+		tmpPath = ImageID;
+		end = tmpPath.find_last_of(".");
+		if (end>0)
+		{
+			iid = tmpPath.substr(0,end);
+			ImageID = iid;
+		}
+	}
+	//printf("after ImageID:%s,found:%d\n",ImageID.c_str(),found);
+	//printf("change Name:%s,end:%d\n",iid.c_str(),end);
+
+	//read name
+	IsExist = 0;
+	XMLElement* pObjectElement = pRoot->FirstChildElement(FindName.c_str());
+	if (pObjectElement == nullptr)
+		IsExist = 0;
+	else
+		IsExist = 1;
+	
+	return 0;
+}
+
+int API_XML::change_label( string loadXml, map<string, string> chLabel, string svPath )
+{
+	char tPath[256];
+	char szImgPath[256];
+	int i, j, svImg, nRet = 0;
+	unsigned long long nCount, labelCount;
+
+	/********************************Init*****************************/
+	string ImageID;
+	string strLabel;
+	string tmpPath,iid;
+	long end = 0;
+
+	map< string, string >::iterator itCHLabel;
+
+	/********************************reading the xml files*****************************/
+	XMLDocument doc;
+	XMLError eResult = doc.LoadFile(const_cast<char*>(loadXml.c_str()));
+	if (eResult != XML_SUCCESS) {
+		cout<<"Error opening the xml files! "<<loadXml<<endl;
+		return TEC_INVALID_PARAM;
+	}
+
+	XMLNode* pRoot = doc.FirstChildElement("annotation");
+	if (pRoot == nullptr) {
+		cout<<"No annotation available!"<<endl;
+		return TEC_INVALID_PARAM;
+	}
+
+	//get name
+	XMLElement* pNameElement = pRoot->FirstChildElement("filename");
+	if (pNameElement == nullptr) {
+		cout<<"No filename here!"<<endl;
+		return TEC_INVALID_PARAM;
+	}
+
+	//read name 
+	const char * Name = pNameElement->GetText();
+	//printf("Name:%s\n",Name);
+
+	ImageID = Name;
+	//printf("before ImageID:%s\n",ImageID.c_str());
+	std::size_t found = ImageID.find(".jpg");
+	if ( (found!=std::string::npos) && (found>0) )
+	{
+		end = 0;
+		tmpPath = ImageID;
+		end = tmpPath.find_last_of(".");
+		if (end>0)
+		{
+			iid = tmpPath.substr(0,end);
+			ImageID = iid;
+		}
+	}
+	//printf("after ImageID:%s,found:%d\n",ImageID.c_str(),found);
+	//printf("change Name:%s,end:%d\n",iid.c_str(),end);
+
+	//object name
+	XMLElement* pObjectElement = pRoot->FirstChildElement("object");
+	if (pObjectElement == nullptr) {
+		cout<<"No filename here!"<<endl;
+		return TEC_INVALID_PARAM;
+	}
+
+	//printf("label:");
+	while (pObjectElement)  
+	{  
+		XMLElement* pLabelElement = pObjectElement->FirstChildElement("name");
+		if (pLabelElement == nullptr) {
+			cout<<"No label here!"<<endl;
+			continue;
+		}
+		
+		const char * label = pLabelElement->GetText();
+		strLabel = string(label);
+		//printf("%s ",label);
+
+		//change label
+		itCHLabel = chLabel.find( strLabel );
+		if (itCHLabel != chLabel.end())
+		{
+			pLabelElement->SetText( itCHLabel->second.c_str() );//change text
+		}
+
+		pObjectElement = pObjectElement->NextSiblingElement("object");  
+	} 
+	//printf("\n");
+
+	//write xml
+	sprintf(tPath, "%s/%s.xml", svPath.c_str(), ImageID.c_str() );
+	doc.SaveFile( tPath, true ); 
+	
+	return 0;
+}
+
 int API_XML::Get_Xml_Hypothese( 
 	string ImageID, 
 	int width, 

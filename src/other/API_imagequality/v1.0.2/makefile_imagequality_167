@@ -17,10 +17,18 @@ COMMEN_DIR = ../src/API_commen
 COMMEN_INC = -I$(COMMEN_DIR)
 COMMEN_SRC = $(COMMEN_DIR)/API_commen.cpp
 
+LIBSVM_DIR = ../src/API_libsvm
+LIBSVM_INC = -I$(LIBSVM_DIR)
+LIBSVM_SRC = $(LIBSVM_DIR)/svm.cpp $(LIBSVM_DIR)/API_libsvm.cpp
+
 LINEARSVM_DIR = ../src/API_linearsvm
 LINEARSVM_INC = -I$(LINEARSVM_DIR)
 LINEARSVM_SRC = $(LINEARSVM_DIR)/tron.cpp $(LINEARSVM_DIR)/linear.cpp $(LINEARSVM_DIR)/API_linearsvm.cpp
 LINEARSVM_LIB = $(LINEARSVM_DIR)/blas.a
+
+PCA_DIR = ../src/API_pca
+PCA_INC = -I$(PCA_DIR)
+PCA_SRC = $(PCA_DIR)/API_pca.cpp
 
 #commen
 IMAGEQUALITY_DIR = ../src/API_imagequality/v1.0.2
@@ -34,13 +42,13 @@ LIBARAY = -L../lib -L../input/lib -L/usr/local/lib -L/usr/local/cuda/lib64 -L/us
 # flags
 CFLAGS =  -fopenmp  -DHAVE_JPEG -DHAVE_PNG
 CXXFLAGS = -fopenmp  -DHAVE_JPEG -DHAVE_PNG \
-	$(COMMEN_INC) $(LINEARSVM_INC) $(IMAGEQUALITY_INC) \
+	$(COMMEN_INC) $(LIBSVM_INC) $(LINEARSVM_INC) $(PCA_INC) $(IMAGEQUALITY_INC) \
 	$(INCLUDE)
 
 LDFLAGS  = -lm -lpthread -lopencv_core -lopencv_highgui -lopencv_imgproc -lopencv_ml
 LDFLAGS  += -ldl -lrt -ljpeg -lpng  -lz -lcurl -lstdc++ -lglog
 
-SRCS =  $(COMMEN_SRC) $(LINEARSVM_SRC) $(IMAGEQUALITY_SRC)
+SRCS =  $(COMMEN_SRC) $(LIBSVM_SRC) $(LINEARSVM_SRC) $(PCA_SRC) $(IMAGEQUALITY_SRC)
 OBJS = $(SRCS:%.cpp=%.o)
 OBJECTS := $(OBJS)
 

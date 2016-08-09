@@ -43,6 +43,7 @@ using namespace std;
 #define Min_T 0.8
 #define Max_T 0.95
 
+//#define SN 1
 
 static bool Sort_FaceDetectInfo(const FaceDetectInfo& elem1, const FaceDetectInfo& elem2)
 {
@@ -80,14 +81,20 @@ int API_FACE_DETECT::Init(
 	char tPath[1024] = {0};
 	char tPath2[1024] = {0};
 	char tPath3[1024] = {0};
+
+	string strLayerName;
 	
 	/***********************************Init**********************************/
-	//vgg-16
+#ifdef SN	//zf+sz
+	strLayerName = "roi_pool_conv5";
+	sprintf(tPath, "%s/face_detect/faster_rcnn_sn/faster_rcnn_sn_test.pt",KeyFilePath);
+	sprintf(tPath2, "%s/face_detect/faster_rcnn_sn/ZF_faster_rcnn_final_inface40w_8w.caffemodel",KeyFilePath); //0.95
+#else	//vgg-16
+	strLayerName = "fc7";
 	sprintf(tPath, "%s/face_detect/faster_rcnn/faster_rcnn_test_face7class.pt",KeyFilePath);
-	//sprintf(tPath, "%s/face_detect/faster_rcnn/faster_rcnn_test.pt",KeyFilePath);
-	//sprintf(tPath2, "%s/face_detect/faster_rcnn/VGG16_faster_rcnn_final_40wsamples_8witer_face7class_20160415.caffemodel",KeyFilePath); //0.985
 	sprintf(tPath2, "%s/face_detect/faster_rcnn/VGG16_faster_rcnn_final_40wsamples_nowider_8witer_face7class_20160417.caffemodel",KeyFilePath); //0.95
-	nRet = api_caffe_FasterRCNN.Init( tPath, tPath2, "fc7", binGPU, deviceID ); 
+#endif
+	nRet = api_caffe_FasterRCNN.Init( tPath, tPath2, strLayerName.c_str(), binGPU, deviceID ); 
 	if (nRet != 0)
 	{
 	   LOOGE<<"Fail to initialization ";

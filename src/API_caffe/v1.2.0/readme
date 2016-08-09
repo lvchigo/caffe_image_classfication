@@ -1,4 +1,7 @@
 
+1.API_caffe_mutilabel:for mutilabel with faster rcnn
+2.API_caffe_faster_rcnn:for facedetect with faster rcnn
+
 /*****faster-rcnn*****/
 
 1.use caffe-faster-rcnn:https://github.com/rbgirshick/caffe-fast-rcnn/tree/0dcd397b29507b8314e252e850518c5695efbb83

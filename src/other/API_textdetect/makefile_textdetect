@@ -1,0 +1,85 @@
+# compiler
+CXX :=g++ -Wall -w -O3 -msse2 -fPIC -ggdb -pthread -std=c++11 -fopenmp
+CC :=gcc -Wall -w -O3 -msse2 -fPIC -ggdb -pthread -std=c++11 -fopenmp
+
+#CXX :=g++ -fPIC 
+#CC :=gcc -fPIC 
+
+#shared library
+SFLAG := -fPIC -shared
+
+###### target and sources
+# sources
+
+COMMEN_DIR = ../src/API_commen
+COMMEN_INC = -I$(COMMEN_DIR)
+COMMEN_SRC = $(COMMEN_DIR)/API_commen.cpp
+
+PLOG_DIR = ../src/API_plog
+PLOG_INC = -I$(PLOG_DIR)
+
+XML_DIR = ../src/API_xml
+XML_INC = -I$(XML_DIR)
+XML_SRC = $(XML_DIR)/tinyxml2.cpp $(XML_DIR)/API_xml.cpp
+
+TEXTDETECT_DIR = ../src/API_textdetect
+TEXTDETECT_INC = -I$(TEXTDETECT_DIR)
+TEXTDETECT_SRC = $(TEXTDETECT_DIR)/RobustTextDetection.cpp  $(TEXTDETECT_DIR)/ConnectedComponent.cpp
+
+# include && lib
+INCLUDE = -I/usr/local/include/opencv -I/usr/local/include/opencv2 -I/usr/local/include
+LIBARAY = -L../lib -L/usr/local/lib -L/usr/lib
+
+# flags
+CFLAGS =  -fopenmp  -DHAVE_JPEG -DHAVE_PNG
+CXXFLAGS = -fopenmp  -DHAVE_JPEG -DHAVE_PNG \
+	$(COMMEN_INC) $(PLOG_INC) $(XML_INC) $(TEXTDETECT_INC) $(INCLUDE) 
+
+LDFLAGS  = -lm -lpthread -lopencv_core -lopencv_highgui -lopencv_imgproc -lopencv_ml -lopencv_features2d
+LDFLAGS  += -ldl -lrt -ljpeg -lpng  -lz -lcurl -lstdc++ -lglog
+
+SRCS =  $(COMMEN_SRC) $(XML_SRC) $(TEXTDETECT_SRC)
+OBJS = $(SRCS:%.cpp=%.o)
+OBJECTS = $(OBJS)
+
+# BIN && LIB
+BIN = ../bin
+LIB = ../lib
+
+###### generation rules
+#.SUFFIXES: .cpp .c .o .so .a .d
+.c.o:
+	@echo ----------------------------------------------
+	$(CC) $(CFLAGS) -c $< -o $@
+	@echo ----------------------------------------------
+
+.cpp.o:
+	@echo ----------------------------------------------
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+	@echo ----------------------------------------------
+
+###### main
+#.PHONY : all 
+all: lib Demo_textdetect
+
+#deps: $(addprefix $(OBJSPATH),$(DEPS))
+Demo_textdetect:$(BIN) $(LIB) $(OBJECTS) Demo_textdetect.cpp
+	@echo ----------------------------------------------
+	$(CXX) $(CXXFLAGS) Demo_textdetect.cpp  -o $(BIN)/Demo_textdetect -ltextdetect_1_0_0 $(LIBARAY) $(LDFLAGS) 
+	@echo ----------------------------------------------
+
+lib: $(LIB) $(OBJECTS)
+	@echo ----------------------------------------------
+	$(CXX) $(CXXFLAGS) -shared -o -fPIC -o $(LIB)/libtextdetect_1_0_0.so $(OBJECTS) $(LIBARAY) $(LDFLAGS)
+	@echo ----------------------------------------------
+
+clean:
+	rm -f $(OBJECTS)
+	rm -f $(TARGET)
+	rm $(LIB)/libtextdetect_1_0_0.so
+	rm -f *.o 
+	rm $(BIN)/Demo_textdetect
+
+rebuild: clean all
+install:
+	install -T $(TARGET) $(INSTALL_PATH)/bin/$(TARGET)

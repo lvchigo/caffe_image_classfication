@@ -79,10 +79,9 @@ int frcnn_test( char *szQueryList, char* KeyFilePath, char *layerName, int binGP
 			cvReleaseImage(&img);img = 0;
 			continue;
 		}	
+		//printf("loadImgPath:%s\n",loadImgPath);
 
 		/************************getRandomID*****************************/
-		//api_commen.getRandomID( ImageID );
-		//ImageID = api_commen.GetIDFromFilePath( loadImgPath );
 		strImageID = api_commen.GetStringIDFromFilePath( loadImgPath );
 		
 		/************************Predict*****************************/	

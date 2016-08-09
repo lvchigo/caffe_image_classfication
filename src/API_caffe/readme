@@ -2,3 +2,6 @@ v1.0.0:caffe
 v1.0.0_DRN:caffe for msdrn
 v1.1.0:caffe for fast rcnn
 v1.2.0:caffe for faster rcnn
+	1.API_caffe_mutilabel:for mutilabel with faster rcnn
+	2.API_caffe_faster_rcnn:for facedetect with faster rcnn
+v1.3.0:caffe for faster rcnn update(coco)

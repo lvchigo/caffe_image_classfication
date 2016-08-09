@@ -71,10 +71,10 @@ public:
 private:
 
 	/***********************************Init**********************************/
-	int i,j,nRet = 0;
+	int i,j,nRet;
 	RunTimer<double> 	run;
 	vector< string > 	dic;
-
+	
 	/***********************************Init**********************************/
 	API_COMMEN 				api_commen;
 	API_CAFFE_FasterRCNN	api_caffe_FasterRCNN;
