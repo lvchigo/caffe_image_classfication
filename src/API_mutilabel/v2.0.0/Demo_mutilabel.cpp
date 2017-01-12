@@ -13,11 +13,11 @@
 #include <opencv/cxcore.h>
 #include <opencv/highgui.h>
 
-#include "API_commen.h"
-#include "API_mutilabel.h"
-#include "TErrorCode.h"
+#include "API_commen/API_commen.h"
+#include "API_mutilabel/v2.0.0/API_mutilabel.h"
+#include "API_commen/TErrorCode.h"
 #include "plog/Log.h"
-#include "API_xml.h"	//read xml
+#include "API_xml/API_xml.h"	//read xml
 
 using namespace cv;
 using namespace std;
@@ -25,6 +25,13 @@ using namespace std;
 #define VOC_LABEL_NUM 20
 #define COCO_LABEL_NUM 80
 #define OLDIN_LABEL_NUM 47
+
+struct Patch_Info
+{
+	string 			label;
+    float 			score;
+    Vec4i 			rect;
+};
 
 //inLabelClass:0-voc,1-coco,2-old in;
 int Get_DataCH2InMutiLabel( char *loadXMLPath, char *loadImagePath, char *inDict,  char *outDict, 
@@ -686,6 +693,267 @@ int frcnn_ReSample( char *szQueryList, char* svPath, char* KeyFilePath, float Mu
 	return nRet;	
 }
 
+int cut_word(string input, char cutWord, string &formal, string &later)
+{
+	string strImageID;
+	
+	long end = input.find_first_of(cutWord);
+	if (end>0)
+	{
+		formal = input.substr(0,end-1);
+		later = input.substr(end+1,input.length());
+	}
+	else
+		return -1;
+
+	return 0;
+}
+
+
+//get list-->download img-->save res;
+int frcnn_Check_OnlineTest( char *szQueryList, char* svPath, int svNum_T )
+{
+	char tPath[256];
+	char charImageID[256];
+	char szImgPath[256];
+	char savePath[256];
+	vector<string> vecText;
+	int i, j, label, svImg, nRet = 0;
+	long inputLabel, nCount, nCountObj, objEnough;
+	string strImageID,text,name;
+	double allPredictTime;
+	FILE *fpListFile = 0;
+
+	API_COMMEN api_commen;
+	API_XML api_xml;
+
+	vector < pair < string,Vec4i > > 	vecOutLabelRect;
+	map< string, long >					mapCount;
+	map< string, long >::iterator 		itCount;
+
+	char tmpChar;
+	char vocab[409600];
+	string word;
+	const long long max_w = 409600;
+	vector< string > vecQuaryString;
+
+	/***********************************Init**********************************/
+	unsigned long long		imageIDLast;			//[In]:image ID for CheckData
+	unsigned long long		imageID;				//[In]:image ID for CheckData
+	unsigned long long		childID;				//[In]:image child ID for CheckData
+	string					url;					//[In]:image url for CheckData
+	int						objNum;
+
+	const static Scalar colors[] =  { 	CV_RGB(0,0,255),	CV_RGB(0,255,255),	CV_RGB(0,255,0),	
+										CV_RGB(255,255,0),	CV_RGB(255,0,0),	CV_RGB(255,0,255),
+										CV_RGB(0,128,255), 	CV_RGB(255,128,0)} ;
+
+	CvFont font;
+ 	cvInitFont(&font,CV_FONT_HERSHEY_TRIPLEX,0.35f,0.7f,0,1,CV_AA);
+	
+	/********************************Open Query List*****************************/
+	fpListFile = fopen(szQueryList,"r");
+	if (!fpListFile) 
+	{
+		cout << "0.can't open " << szQueryList << endl;
+		return TEC_INVALID_PARAM;
+	}
+
+	nCount = 0;
+	nCountObj = 0;
+	allPredictTime = 0.0;
+
+	/*****************************Load Query*****************************/
+	//fscanf(fpListFile, "%lld", &w2v_words);
+	long CountLines = api_commen.doc2vec_CountLines(szQueryList);
+	printf("Load Query.txt...%lld...\n",CountLines);
+	for (long b = 0; b < CountLines; b++) {
+		//load word to vector
+		long a = 0;
+		vecQuaryString.clear();
+
+		while (1) {
+			vocab[a] = fgetc(fpListFile);	
+			tmpChar = vocab[a];
+			if ((a < max_w) && (vocab[a] != ' ') && (vocab[a] != '\n')) a++;
+			if ( ( vocab[a] == ' ' ) || feof(fpListFile) || (vocab[a] == '\n') )
+			{
+				if ( ( vocab[0] != ' ' ) && (vocab[0] != '\n') )
+				{
+					vocab[a] = 0;
+					word = vocab;
+					vecQuaryString.push_back( word );
+					//printf("a:%lld,word:%s\n",a,word.c_str());
+
+					a = 0;
+				}
+			}
+			if (feof(fpListFile) || (tmpChar == '\n')) break;
+		}
+		
+		//change name
+		svImg = 0;
+		imageID = atol(vecQuaryString[5].c_str());
+		childID = atol(vecQuaryString[6].c_str());
+		url = vecQuaryString[7];
+		objNum = atoi(vecQuaryString[8].c_str());
+		//printf("imageID:%lld,childID:%lld,url:%s,objNum:%d\n",imageID,childID,url.c_str(),objNum);
+
+		//get high value image
+		if ( ( objNum<2 ) || (imageIDLast == imageID) )
+			continue;
+		
+		for(i=0;i<objNum;i++)
+		{
+		    Vec4i rect;
+			string label = vecQuaryString[9+i*6];
+			float score = atof(vecQuaryString[10+i*6].c_str());
+			rect[0] = atoi(vecQuaryString[11+i*6].c_str());
+			rect[1] = atoi(vecQuaryString[12+i*6].c_str());
+			rect[2] = atoi(vecQuaryString[13+i*6].c_str());
+			rect[3] = atoi(vecQuaryString[14+i*6].c_str());
+
+			if (score<0.8)
+				continue;
+
+			/************************find label*****************************/		
+			itCount = mapCount.find( label );
+			if (itCount == mapCount.end())
+				mapCount[label] = 1;
+			else if ( (itCount != mapCount.end()) && (itCount->second<svNum_T) )
+				mapCount[label]++;
+			else if ( (itCount != mapCount.end()) && (itCount->second>=svNum_T) )
+				svImg++;
+		}
+
+		//do not save image(all out of num_T)
+		if (svImg == objNum )
+			continue;
+
+		//save enough
+		objEnough = 0;
+		if (mapCount.size() == 64 )
+		{
+			for(itCount = mapCount.begin(); itCount != mapCount.end(); itCount++)
+			{
+				if (itCount->second>=svNum_T)
+					objEnough++;
+				else
+					break;
+			}
+
+			if ( objEnough == mapCount.size() )
+				break;
+		}
+
+		/*****************************wget_image_file*****************************/
+		sprintf( szImgPath, "%s/%lld_%lld.jpg", svPath, imageID, childID );
+		std::string wgetFile = "wget -q -T 3 -t 1 " + url + " -O " + string(szImgPath);
+		nRet = system( wgetFile.c_str() );
+
+		/*****************************cvLoadImage*****************************/
+		IplImage *img = cvLoadImage(szImgPath);
+		if(!img || (img->width<16) || (img->height<16) || img->nChannels != 3 || img->depth != IPL_DEPTH_8U) 
+		{	
+			cout<<"Can't open " << szImgPath << endl;
+			
+			//rm img file
+			sprintf(tPath, "rm %s", szImgPath );
+			nRet = system(tPath);
+
+			//Release
+			cvReleaseImage(&img);img = 0;
+			
+			continue;
+		}	
+		//printf("szImgPath:%s\n",szImgPath);
+		
+		//save img data
+		vecOutLabelRect.clear();
+		for(i=0;i<objNum;i++)
+		{
+		    Vec4i rect;
+			string label = vecQuaryString[9+i*6];
+			float score = atof(vecQuaryString[10+i*6].c_str());
+			rect[0] = atoi(vecQuaryString[11+i*6].c_str());
+			rect[1] = atoi(vecQuaryString[12+i*6].c_str());
+			rect[2] = atoi(vecQuaryString[13+i*6].c_str());
+			rect[3] = atoi(vecQuaryString[14+i*6].c_str());
+
+			if (score<0.9)
+				continue;
+
+			vecOutLabelRect.push_back( std::make_pair( label, rect ) );
+
+			Scalar color = colors[i%8];
+			cvRectangle( img, cvPoint(rect[0], rect[1]), cvPoint(rect[2], rect[3]), color, 2, 8, 0);
+
+			sprintf(tPath, "%.2f %s", score, label.c_str() );
+			text = tPath;
+			cvPutText( img, text.c_str(), cvPoint(rect[0]+1, rect[1]+20), &font, color );
+		}
+
+		if (vecOutLabelRect.size()<1)
+		{	
+			//rm img file
+			sprintf(tPath, "rm %s", szImgPath );
+			nRet = system(tPath);
+
+			//Release
+			cvReleaseImage(&img);img = 0;
+			
+			continue;
+		}	
+		
+		//save checkimg
+		sprintf( savePath, "%s/CheckImg/%lld_%lld.jpg", svPath, imageID, childID );
+		cvSaveImage( savePath, img );
+
+		//write_xml
+		sprintf( tPath, "%s/Annoations/", svPath );
+		sprintf(charImageID, "%lld_%lld", imageID, childID );
+		strImageID = charImageID;
+		nRet = api_xml.write_xml( strImageID, tPath, vecOutLabelRect );
+		if (nRet!=0)
+		{
+			//rm img file
+			sprintf(tPath, "rm %s", szImgPath );
+			nRet = system(tPath);
+			
+			cout << "Err to write_xml!" << endl;
+			cvReleaseImage(&img);img = 0;
+			continue;
+		}
+
+		//mv img file
+		sprintf( tPath, "mv %s %s/JPEGImages/", szImgPath, svPath );
+		system( tPath );
+
+		//renew last imageID
+		imageIDLast = imageID;
+
+		nCountObj += objNum;
+		nCount++;
+		if( nCount%50 == 0 )
+			printf("Loaded %ld img...\n",nCount);
+		
+		cvReleaseImage(&img);img = 0;
+	}
+
+	/*********************************close file*************************************/
+	if (fpListFile) {fclose(fpListFile);fpListFile = 0;}	
+
+	/*********************************Print Info*********************************/
+	if ( nCount != 0 ) 
+	{
+		printf( "nCount:%ld,nCountObj:%ld_%.4f,PredictTime:%.4fms\n", 
+			nCount, nCountObj, nCountObj*1.0/nCount, allPredictTime*1000.0/nCount );
+	}
+	
+	cout<<"Done!! "<<endl;
+	
+	return nRet;	
+}
 
 int frcnn_test( char *szQueryList, char* svPath, char* KeyFilePath, float MutiLabel_T, int binGPU, int deviceID )
 {
@@ -760,7 +1028,6 @@ int frcnn_test( char *szQueryList, char* svPath, char* KeyFilePath, float MutiLa
 		run.start();
 		sprintf( tPath, "%d_%d", nCount, nCountObj );
 		nRet = api_muti_label.Predict( img, string(tPath), nCount, nCountObj, MutiLabel_T, Res );
-		
 		if ( (nRet!=0) || (Res.size()<1) )
 		{
 			LOOGE<<"[Predict Err!!loadImgPath:]"<<loadImgPath;
@@ -814,6 +1081,470 @@ int frcnn_test( char *szQueryList, char* svPath, char* KeyFilePath, float MutiLa
 	return nRet;	
 }
 
+int frcnn_test_face( char *szQueryList, char* KeyFilePath, float MutiLabel_T, int binGPU, int deviceID )
+{
+	char tPath[256];
+	char loadImgPath[256];
+	char szImgPath[256];
+	char savePath[256];
+	vector<string> vecText;
+	int i, j, label, svImg, nRet = 0;
+	long inputLabel, nCount, nCountObj, nCountFace;
+	string strImageID,text,name;
+	double allPredictTime;
+	FILE *fpListFile = 0;
+
+	RunTimer<double> run;
+	API_COMMEN api_commen;
+	API_MUTI_LABEL api_muti_label;
+
+	vector< MutiLabelInfo > Res_MultiLabel;
+	vector< FaceAnnoationInfo > Res_FaceAnnoation;
+
+	/***********************************Init**********************************/
+	plog::init(plog::info, "plog.txt"); 
+
+	const static Scalar colors[] =  { 	CV_RGB(0,0,255),	CV_RGB(0,255,255),	CV_RGB(0,255,0),	
+										CV_RGB(255,255,0),	CV_RGB(255,0,0),	CV_RGB(255,0,255),
+										CV_RGB(0,128,255), 	CV_RGB(255,128,0)} ;
+
+	CvFont font;
+ 	cvInitFont(&font,CV_FONT_HERSHEY_TRIPLEX,0.35f,0.7f,0,1,CV_AA);
+	
+	/********************************Open Query List*****************************/
+	fpListFile = fopen(szQueryList,"r");
+	if (!fpListFile) 
+	{
+		cout << "0.can't open " << szQueryList << endl;
+		return TEC_INVALID_PARAM;
+	}
+
+	/***********************************Init*************************************/
+	nRet = api_muti_label.Init( KeyFilePath, binGPU, deviceID ); 
+	if (nRet != 0)
+	{
+	   cout<<"Fail to initialization "<<endl;
+	   return TEC_INVALID_PARAM;
+	}
+
+	nCount = 0;
+	nCountObj = 0;
+	nCountFace = 0;
+	allPredictTime = 0.0;
+	/*****************************Process one by one*****************************/
+	while(EOF != fscanf(fpListFile, "%s", loadImgPath))
+	{
+		IplImage *img = cvLoadImage(loadImgPath);
+		if(!img || (img->width<32) || (img->height<32) || img->nChannels != 3 || img->depth != IPL_DEPTH_8U) 
+		{	
+			cout<<"Can't open " << loadImgPath << endl;
+			cvReleaseImage(&img);img = 0;
+			continue;
+		}	
+		//printf("loadImgPath:%s\n",loadImgPath);
+
+		/************************getRandomID*****************************/
+		strImageID = api_commen.GetStringIDFromFilePath( loadImgPath );
+
+		/************************Predict*****************************/	
+		Res_MultiLabel.clear();
+		run.start();
+		sprintf( tPath, "%d_%d", nCount, nCountObj );
+		nRet = api_muti_label.Predict( img, string(tPath), nCount, nCountObj, MutiLabel_T, Res_MultiLabel );
+		if ( (nRet!=0) || (Res_MultiLabel.size()<1) )
+		{
+			LOOGE<<"[Predict Err!!loadImgPath:]"<<loadImgPath;
+			cvReleaseImage(&img);img = 0;
+			continue;
+		}
+		run.end();
+		//LOOGI<<"[Predict] time:"<<run.time();
+		allPredictTime += run.time();
+
+		/***********************************Face:Predict**********************************/
+		Res_FaceAnnoation.clear();
+		run.start();
+		nRet = api_muti_label.Face_Predict( img, Res_MultiLabel, Res_FaceAnnoation );
+		if ( (nRet!=0) || (Res_FaceAnnoation.size()<1) )
+		{
+			LOOGE<<"[Face:Predict Err!!loadImgPath:]"<<loadImgPath;
+			cvReleaseImage(&img);img = 0;
+			continue;
+		}
+		run.end();
+		//LOOGI<<"[Face:Predict] time:"<<run.time();
+		allPredictTime += run.time();
+		
+		/************************save img data*****************************/
+		{
+			name = Res_FaceAnnoation[0].label;
+			if (name=="person.face")
+				sprintf(tPath, "res_predict/face/", tPath );
+			else
+				sprintf(tPath, "res_predict/noface/", tPath );
+		}
+		for(i=0;i<Res_FaceAnnoation.size();i++)  
+		{						
+			Scalar color = colors[i%8];
+
+			if (Res_FaceAnnoation[i].label == "person.face" )
+			{
+				api_muti_label.Face_Draw_Rotate_Box( img, Res_FaceAnnoation[i], color );
+
+				IplImage* Rotate_ROI = api_muti_label.Face_Get_Rotate_ROI( img, Res_FaceAnnoation[i] );
+				sprintf( savePath, "res_predict/roi/%s_%d.jpg", strImageID.c_str(), i );
+				cvSaveImage( savePath, Rotate_ROI );
+				cvReleaseImage(&Rotate_ROI);Rotate_ROI = 0;
+				nCountFace++;
+			}
+			
+			cvRectangle( img, cvPoint(Res_FaceAnnoation[i].rect[0], Res_FaceAnnoation[i].rect[1]),
+	                   cvPoint(Res_FaceAnnoation[i].rect[2], Res_FaceAnnoation[i].rect[3]), color, 2, 8, 0);
+
+			sprintf(szImgPath, "%.2f %.2f %s", Res_FaceAnnoation[i].score, Res_FaceAnnoation[i].angle, Res_FaceAnnoation[i].label.c_str() );
+			text = szImgPath;
+			cvPutText( img, text.c_str(), cvPoint(Res_FaceAnnoation[i].rect[0]+1, Res_FaceAnnoation[i].rect[1]+20), &font, color );
+
+			for (j=0;j<5;j++)
+				cvCircle( img, cvPoint(Res_FaceAnnoation[i].annoation[2*j], Res_FaceAnnoation[i].annoation[2*j+1]), 2, colors[j%8], 2, 8, 0 );
+
+			sprintf(tPath, "%s%s-%.2f_", tPath, Res_FaceAnnoation[i].label.c_str(), Res_FaceAnnoation[i].score );
+		}
+		sprintf( savePath, "%s%s.jpg", tPath, strImageID.c_str() );
+		cvSaveImage( savePath, img );
+
+		nCountObj += Res_MultiLabel.size();
+		nCount++;
+		if( nCount%50 == 0 )
+			printf("Loaded %ld img...,time:%.4f\n",nCount,run.time());
+		
+		cvReleaseImage(&img);img = 0;
+	}
+
+	/*********************************close file*************************************/
+	if (fpListFile) {fclose(fpListFile);fpListFile = 0;}	
+
+	/*********************************Release*************************************/
+	api_muti_label.Release();
+
+	/*********************************Print Info*********************************/
+	if ( nCount != 0 ) 
+	{
+		printf( "nCount:%ld,nCountObj:%ld_%.4f,nCountFace:%ld_%.4f,PredictTime:%.4fms\n", 
+			nCount, nCountObj, nCountObj*1.0/nCount, nCountFace, nCountFace*1.0/nCount, allPredictTime*1000.0/nCount );
+	}
+	
+	cout<<"Done!! "<<endl;
+	
+	return nRet;	
+}
+
+
+//test for lantian
+int frcnn_test_BigData( char *szQueryList, char* svPath, char* KeyFilePath, float MutiLabel_T, int binGPU, int deviceID )
+{
+	char tPath[256];
+	char loadImgPath[256];
+	char szImgPath[256];
+	char savePath[256];
+	vector<string> vecText;
+	int i, j, label, svImg, nRet = 0;
+	long inputLabel, nCount, nCountObj;
+	string strImageID,text,name;
+	double allPredictTime,ratio;
+	FILE *fpListFile = 0;
+
+	RunTimer<double> run;
+	API_COMMEN api_commen;
+	API_MUTI_LABEL api_muti_label;
+
+	vector< MutiLabelInfo > Res;
+
+	/***********************************Init**********************************/
+	unsigned long long		imageID;				//[In]:image ID for CheckData
+	unsigned long long		childID;				//[In]:image child ID for CheckData
+	sprintf( tPath, "res/plog.log" );
+	plog::init(plog::error, tPath); 
+	sprintf( tPath, "res/module-in-logo-detection.log" );
+	plog::init<enum_module_in_logo>(plog::info, tPath, 100000000, 100000);
+
+	const static Scalar colors[] =  { 	CV_RGB(0,0,255),	CV_RGB(0,255,255),	CV_RGB(0,255,0),	
+										CV_RGB(255,255,0),	CV_RGB(255,0,0),	CV_RGB(255,0,255),
+										CV_RGB(0,128,255), 	CV_RGB(255,128,0)} ;
+
+	CvFont font;
+ 	cvInitFont(&font,CV_FONT_HERSHEY_TRIPLEX,0.35f,0.7f,0,1,CV_AA);
+	
+	/********************************Open Query List*****************************/
+	fpListFile = fopen(szQueryList,"r");
+	if (!fpListFile) 
+	{
+		cout << "0.can't open " << szQueryList << endl;
+		return TEC_INVALID_PARAM;
+	}
+
+	/***********************************Init*************************************/
+	nRet = api_muti_label.Init( KeyFilePath, binGPU, deviceID ); 
+	if (nRet != 0)
+	{
+	   cout<<"Fail to initialization "<<endl;
+	   return TEC_INVALID_PARAM;
+	}
+
+	sprintf( tPath, "res/MutiLabel_BigData.txt" );
+	FILE *fpListFile_sv = fopen(tPath,"w");
+	if (!fpListFile_sv) 
+	{
+		cout << "0.can't open " << tPath << endl;
+		return TEC_INVALID_PARAM;
+	}
+
+	nCount = 0;
+	nCountObj = 0;
+	allPredictTime = 0.0;
+	/*****************************Process one by one*****************************/
+	while(EOF != fscanf(fpListFile, "%s", loadImgPath))
+	{
+		IplImage *img = cvLoadImage(loadImgPath);
+		if(!img || (img->width<32) || (img->height<32) || img->nChannels != 3 || img->depth != IPL_DEPTH_8U) 
+		{	
+			cout<<"Can't open " << loadImgPath << endl;
+			cvReleaseImage(&img);img = 0;
+			continue;
+		}	
+		//printf("loadImgPath:%s\n",loadImgPath);
+
+		/************************getRandomID*****************************/
+		strImageID = api_commen.GetStringIDFromFilePath( loadImgPath );
+		
+		/************************Predict*****************************/	
+		Res.clear();
+		run.start();
+		sprintf( tPath, "%d_%d", nCount, nCountObj );
+		nRet = api_muti_label.Predict( img, string(tPath), nCount, nCountObj, MutiLabel_T, Res );
+		
+		if ( (nRet!=0) || (Res.size()<1) )
+		{
+			LOOGE<<"[Predict Err!!loadImgPath:]"<<loadImgPath;
+			cvReleaseImage(&img);img = 0;
+			continue;
+		}
+		run.end();
+		//LOOGI<<"[Predict] time:"<<run.time();
+		allPredictTime += run.time();
+		
+		/************************save img data*****************************/
+		for(i=0;i<Res.size();i++)  
+		{						
+			Scalar color = colors[i%8];
+			cvRectangle( img, cvPoint(Res[i].rect[0], Res[i].rect[1]),
+	                   cvPoint(Res[i].rect[2], Res[i].rect[3]), color, 2, 8, 0);
+
+			sprintf(szImgPath, "%.2f %s", Res[i].score, Res[i].label.c_str() );
+			text = szImgPath;
+			cvPutText( img, text.c_str(), cvPoint(Res[i].rect[0]+1, Res[i].rect[1]+20), &font, color );
+
+			//if (i<3)
+			//	printf("Res:%.2f_%.2f_%.2f!!\n",Res[i].feat[0],Res[i].feat[1],Res[i].feat[2]);
+		}
+		sprintf( savePath, "%s/%s.jpg", svPath, strImageID.c_str() );
+		cvSaveImage( savePath, img );
+
+		//write fpListFile_sv
+		{
+			fprintf(fpListFile_sv, "%s\t%d\t%d\t%d\t", strImageID.c_str(), img->width, img->height, Res.size() );	//write fpListFile_sv
+			for(i=0;i<Res.size();i++)  
+			{			
+				ratio = (Res[i].rect[2]-Res[i].rect[0])*(Res[i].rect[3]-Res[i].rect[1])*1.0/(img->width*img->height);
+				fprintf(fpListFile_sv, "%s,%.3f,%d,%d,%d,%d,%.4f;",Res[i].label.c_str(),Res[i].score,
+					Res[i].rect[0], Res[i].rect[1],Res[i].rect[2], Res[i].rect[3], ratio);	//write fpListFile_sv
+			}
+			fprintf(fpListFile_sv, "\n");	//write fpListFile_sv
+		}
+
+		nCountObj += Res.size();
+		nCount++;
+		if( nCount%50 == 0 )
+			printf("Loaded %ld img...,time:%.4f\n",nCount,run.time());
+		
+		cvReleaseImage(&img);img = 0;
+	}
+
+	/*********************************close file*************************************/
+	if (fpListFile) {fclose(fpListFile);fpListFile = 0;}	
+	if (fpListFile_sv) {fclose(fpListFile_sv);fpListFile_sv = 0;}
+
+	/*********************************Release*************************************/
+	api_muti_label.Release();
+
+	/*********************************Print Info*********************************/
+	if ( nCount != 0 ) 
+	{
+		printf( "nCount:%ld,nCountObj:%ld_%.4f,PredictTime:%.4fms\n", 
+			nCount, nCountObj, nCountObj*1.0/nCount, allPredictTime*1000.0/nCount );
+	}
+	
+	cout<<"Done!! "<<endl;
+	
+	return nRet;	
+}
+
+int frcnn_test_checkface( char *szQueryList, char* svPath, char* KeyFilePath, float MutiLabel_T, int binGPU, int deviceID )
+{
+	char tPath[256];
+	char loadImgPath[256];
+	char szImgPath[256];
+	char savePath[256];
+	vector<string> vecText;
+	int i, j, label, svImg, nRet = 0;
+	long inputLabel, nCount, nCountObj;
+	string strImageID,text,name;
+	double allPredictTime;
+	FILE *fpListFile = 0;
+
+	RunTimer<double> run;
+	API_COMMEN api_commen;
+	API_MUTI_LABEL api_muti_label;
+
+	vector< MutiLabelInfo > Res;
+
+	/***********************************Init**********************************/
+	unsigned long long		imageID;				//[In]:image ID for CheckData
+	unsigned long long		childID;				//[In]:image child ID for CheckData
+	sprintf( tPath, "res/plog.log" );
+	plog::init(plog::error, tPath); 
+	sprintf( tPath, "res/module-in-logo-detection.log" );
+	plog::init<enum_module_in_logo>(plog::info, tPath, 100000000, 100000);
+
+	const static Scalar colors[] =	{	CV_RGB(0,0,255),	CV_RGB(0,255,255),	CV_RGB(0,255,0),	
+										CV_RGB(255,255,0),	CV_RGB(255,0,0),	CV_RGB(255,0,255),
+										CV_RGB(0,128,255),	CV_RGB(255,128,0)} ;
+
+	CvFont font;
+	cvInitFont(&font,CV_FONT_HERSHEY_TRIPLEX,0.35f,0.7f,0,1,CV_AA);
+	
+	/********************************Open Query List*****************************/
+	fpListFile = fopen(szQueryList,"r");
+	if (!fpListFile) 
+	{
+		cout << "0.can't open " << szQueryList << endl;
+		return TEC_INVALID_PARAM;
+	}
+
+	/***********************************Init*************************************/
+	nRet = api_muti_label.Init( KeyFilePath, binGPU, deviceID ); 
+	if (nRet != 0)
+	{
+	   cout<<"Fail to initialization "<<endl;
+	   return TEC_INVALID_PARAM;
+	}
+
+	nCount = 0;
+	nCountObj = 0;
+	allPredictTime = 0.0;
+	/*****************************Process one by one*****************************/
+	while(EOF != fscanf(fpListFile, "%s", loadImgPath))
+	{
+		IplImage *img = cvLoadImage(loadImgPath);
+		if(!img || (img->width<32) || (img->height<32) || img->nChannels != 3 || img->depth != IPL_DEPTH_8U) 
+		{	
+			cout<<"Can't open " << loadImgPath << endl;
+			cvReleaseImage(&img);img = 0;
+			continue;
+		}	
+		//printf("loadImgPath:%s\n",loadImgPath);
+
+		/************************getRandomID*****************************/
+		strImageID = api_commen.GetStringIDFromFilePath( loadImgPath );
+		
+		/************************Predict*****************************/	
+		Res.clear();
+		run.start();
+		sprintf( tPath, "%d_%d", nCount, nCountObj );
+		nRet = api_muti_label.Predict( img, string(tPath), nCount, nCountObj, MutiLabel_T, Res );
+		
+		if ( (nRet!=0) || (Res.size()<1) )
+		{
+			LOOGE<<"[Predict Err!!loadImgPath:]"<<loadImgPath;
+			cvReleaseImage(&img);img = 0;
+			continue;
+		}
+		run.end();
+		//LOOGI<<"[Predict] time:"<<run.time();
+		allPredictTime += run.time();
+		
+		/************************save img data*****************************/
+		int bFace = 0;
+		for(i=0;i<Res.size();i++) 
+		{
+			if (Res[i].label == "person.face" )
+			{
+				bFace = 1;
+				break;
+			}
+		}
+		
+		{
+			if (bFace==1)
+				sprintf(tPath, "res_predict/face/", tPath );
+			else
+				sprintf(tPath, "res_predict/noface/", tPath );
+		}
+		
+		for(i=0;i<Res.size();i++)  
+		{		
+			if (Res[i].label == "person.face" )
+			{
+				cvSetImageROI( img,cvRect(Res[i].rect[0], Res[i].rect[1], 
+					(Res[i].rect[2]-Res[i].rect[0]),(Res[i].rect[3]-Res[i].rect[1])) );
+				IplImage* faceROI = cvCreateImage(cvGetSize(img),img->depth,img->nChannels);
+                cvCopy( img, faceROI, NULL );
+                cvResetImageROI(img);
+				sprintf( savePath, "res_predict/roi/%s_%d.jpg", strImageID.c_str(), i );
+				cvSaveImage( savePath, faceROI );
+				cvReleaseImage(&faceROI);faceROI = 0;
+			}
+		
+			Scalar color = colors[i%8];
+			cvRectangle( img, cvPoint(Res[i].rect[0], Res[i].rect[1]),
+					   cvPoint(Res[i].rect[2], Res[i].rect[3]), color, 2, 8, 0);
+
+			sprintf(szImgPath, "%.2f %s", Res[i].score, Res[i].label.c_str() );
+			text = szImgPath;
+			cvPutText( img, text.c_str(), cvPoint(Res[i].rect[0]+1, Res[i].rect[1]+20), &font, color );
+
+			//if (i<3)
+			//	printf("Res:%.2f_%.2f_%.2f!!\n",Res[i].feat[0],Res[i].feat[1],Res[i].feat[2]);
+		}
+		sprintf( savePath, "%s/%s.jpg", tPath, strImageID.c_str() );
+		cvSaveImage( savePath, img );
+
+		nCountObj += Res.size();
+		nCount++;
+		if( nCount%50 == 0 )
+			printf("Loaded %ld img...,time:%.4f\n",nCount,run.time());
+		
+		cvReleaseImage(&img);img = 0;
+	}
+
+	/*********************************close file*************************************/
+	if (fpListFile) {fclose(fpListFile);fpListFile = 0;}	
+
+	/*********************************Release*************************************/
+	api_muti_label.Release();
+
+	/*********************************Print Info*********************************/
+	if ( nCount != 0 ) 
+	{
+		printf( "nCount:%ld,nCountObj:%ld_%.4f,PredictTime:%.4fms\n", 
+			nCount, nCountObj, nCountObj*1.0/nCount, allPredictTime*1000.0/nCount );
+	}
+	
+	cout<<"Done!! "<<endl;
+	
+	return nRet;	
+}
+
 int main(int argc, char* argv[])
 {
 	int  ret = 0;
@@ -836,8 +1567,20 @@ int main(int argc, char* argv[])
 	else if (argc == 8 && strcmp(argv[1],"-resample") == 0) {
 		ret = frcnn_ReSample( argv[2], argv[3], argv[4], atof(argv[5]), atoi(argv[6]), atoi(argv[7]) );
 	}
+	else if (argc == 5 && strcmp(argv[1],"-check_onlinetest") == 0) {
+		ret = frcnn_Check_OnlineTest( argv[2], argv[3], atoi(argv[4]) );
+	}
 	else if (argc == 8 && strcmp(argv[1],"-test") == 0) {
 		ret = frcnn_test( argv[2], argv[3], argv[4], atof(argv[5]), atoi(argv[6]), atoi(argv[7]) );
+	}
+	else if (argc == 7 && strcmp(argv[1],"-test_face") == 0) {
+		ret = frcnn_test_face( argv[2], argv[3], atof(argv[4]), atoi(argv[5]), atoi(argv[6]) );
+	}
+	else if (argc == 8 && strcmp(argv[1],"-test_bigdata") == 0) {
+		ret = frcnn_test_BigData( argv[2], argv[3], argv[4], atof(argv[5]), atoi(argv[6]), atoi(argv[7]) );
+	}
+	else if (argc == 8 && strcmp(argv[1],"-test_checkface") == 0) {
+		ret = frcnn_test_checkface( argv[2], argv[3], argv[4], atof(argv[5]), atoi(argv[6]), atoi(argv[7]) );
 	}
 	else
 	{
@@ -847,7 +1590,11 @@ int main(int argc, char* argv[])
 		cout << "\tDemo_mutilabel -change_voclabel4test loadXMLPath svPath\n" << endl;
 		cout << "\tDemo_mutilabel -count_data loadXMLPath loadImagePath svPath\n" << endl;
 		cout << "\tDemo_mutilabel -resample loadImagePath svPath keyfile MutiLabel_T binGPU deviceID\n" << endl;
+		cout << "\tDemo_mutilabel -check_onlinetest loadPath svPath svNum_T\n" << endl;
 		cout << "\tDemo_mutilabel -test loadImagePath svPath keyfile MutiLabel_T binGPU deviceID\n" << endl;
+		cout << "\tDemo_mutilabel -test_face loadImagePath keyfile MutiLabel_T binGPU deviceID\n" << endl;
+		cout << "\tDemo_mutilabel -test_bigdata loadImagePath svPath keyfile MutiLabel_T binGPU deviceID\n" << endl;
+		cout << "\tDemo_mutilabel -test_checkface loadImagePath svPath keyfile MutiLabel_T binGPU deviceID\n" << endl;
 		return ret;
 	}
 	return ret;

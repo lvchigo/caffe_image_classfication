@@ -49,7 +49,7 @@ CXXFLAGS = -fopenmp  -DHAVE_JPEG -DHAVE_PNG \
 	$(INCLUDE)
 
 LDFLAGS  = -lm -lpthread -lopencv_core -lopencv_highgui -lopencv_imgproc -lopencv_ml
-LDFLAGS  += -ldl -lrt -ljpeg -lpng  -lz -lcurl -lstdc++ -lglog -lopenblas
+LDFLAGS  += -ldl -lrt -ljpeg -lpng  -lz -lcurl -lstdc++ -lglog
 
 SRCS =  $(COMMEN_SRC) \
 	$(JC_SRC) $(CFG_SRC) $(DI_SRC)

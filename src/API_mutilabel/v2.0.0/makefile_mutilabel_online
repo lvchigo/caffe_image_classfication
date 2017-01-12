@@ -1,0 +1,94 @@
+
+# compiler
+CXX :=g++ -Wall -w -O3 -msse2 -fPIC -ggdb -pthread -std=c++11 -fopenmp
+CC :=gcc -Wall -w -O3 -msse2 -fPIC -ggdb -pthread -std=c++11 -fopenmp
+
+#shared library
+SFLAG := -fPIC -shared
+
+###### target and sources
+# sources
+
+SOURCES_DIR = ../src
+SOURCES_INC = -I$(SOURCES_DIR)
+
+CAFFE_DIR = ../src/API_caffe/v1.2.0
+CAFFE_INC = -I$(CAFFE_DIR) -I$(CAFFE_DIR)/include 
+CAFFE_SRC = $(CAFFE_DIR)/API_caffe_mutilabel.cpp 
+CAFFE_LIB = -L$(CAFFE_DIR)/lib
+
+COMMEN_DIR = ../src/API_commen
+COMMEN_INC = -I$(COMMEN_DIR)
+COMMEN_SRC = $(COMMEN_DIR)/API_commen.cpp
+
+PLOG_DIR = ../src/API_plog
+PLOG_INC = -I$(PLOG_DIR)
+
+#XML_DIR = ../src/API_xml
+#XML_INC = -I$(XML_DIR)
+#XML_SRC = $(XML_DIR)/tinyxml2.cpp $(XML_DIR)/API_xml.cpp
+
+MUTILABEL_DIR = ../src/API_mutilabel/v2.0.0
+MUTILABEL_INC = -I$(MUTILABEL_DIR)
+MUTILABEL_SRC = $(MUTILABEL_DIR)/API_mutilabel.cpp
+
+# include && lib
+INCLUDE = -I/usr/local/include/opencv -I/usr/local/include/opencv2 -I/usr/local/include -I/usr/local/cuda/include
+LIBARAY = -L../lib -L/usr/local/lib -L/usr/local/cuda/lib64 -L/usr/lib
+LIBARAY += $(CAFFE_LIB)
+
+# flags
+CFLAGS =  -fopenmp  -DHAVE_JPEG -DHAVE_PNG
+CXXFLAGS = -fopenmp  -DHAVE_JPEG -DHAVE_PNG \
+	$(SOURCES_INC) $(CAFFE_INC) $(COMMEN_INC) $(PLOG_INC) $(XML_INC) $(MUTILABEL_INC) $(INCLUDE) 
+
+LDFLAGS  = -lm -lpthread -lopencv_core -lopencv_highgui -lopencv_imgproc -lopencv_ml -lopencv_imgcodecs
+LDFLAGS  += -lcublas_device -lcublas -lcudadevrt -lcudart  -lcufft -lcufftw -lculibos -lcurand -lcusparse -lnppc -lnppi -lnpps -lboost_system
+LDFLAGS  += -ldl -lrt -ljpeg -lpng  -lz -lcurl -lstdc++ -lglog -lcaffe 
+LDFLAGS  += -lopenblas
+
+SRCS =  $(COMMEN_SRC) $(CAFFE_SRC) $(XML_SRC) $(MUTILABEL_SRC)
+OBJS = $(SRCS:%.cpp=%.o)
+OBJECTS = $(OBJS) $(CUDAOBJS)
+
+# BIN && LIB
+BIN = ../bin
+LIB = ../lib
+
+###### generation rules
+#.SUFFIXES: .cpp .c .o .so .a .d
+.c.o:
+	@echo ----------------------------------------------
+	$(CC) $(CFLAGS) -c $< -o $@
+	@echo ----------------------------------------------
+
+.cpp.o:
+	@echo ----------------------------------------------
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+	@echo ----------------------------------------------
+
+###### main
+#.PHONY : all 
+all: lib Demo_mutilabel
+
+#deps: $(addprefix $(OBJSPATH),$(DEPS))
+Demo_mutilabel:$(BIN) $(LIB) $(OBJECTS) Demo_mutilabel_online.cpp
+	@echo ----------------------------------------------
+	$(CXX) $(CXXFLAGS) Demo_mutilabel_online.cpp  -o $(BIN)/Demo_mutilabel -lmutilabel_2_2_0 $(LIBARAY) $(LDFLAGS) 
+	@echo ----------------------------------------------
+
+lib: $(LIB) $(OBJECTS)
+	@echo ----------------------------------------------
+	$(CXX) $(CXXFLAGS) -shared -o -fPIC -o $(LIB)/libmutilabel_2_2_0.so $(OBJECTS) $(LIBARAY) $(LDFLAGS)
+	@echo ----------------------------------------------
+
+clean:
+	rm -f $(OBJECTS)
+	rm -f $(TARGET)
+	rm $(LIB)/libmutilabel_2_2_0.so
+	rm -f *.o 
+	rm $(BIN)/Demo_mutilabel
+
+rebuild: clean all
+install:
+	install -T $(TARGET) $(INSTALL_PATH)/bin/$(TARGET)

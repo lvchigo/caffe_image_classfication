@@ -79,6 +79,7 @@ public:
 	/***********************************ResizeImg*************************************/
 	IplImage* ResizeImg( IplImage *img, int MaxLen = 512 );
 	IplImage* ResizeImg( IplImage *img, float &ratio, int MaxLen = 512 );
+	IplImage* ResizeImg( IplImage *img, float &w_ratio, float &h_ratio, int MaxLen = 320 );
 
 	/***********************************Normalization*************************************/
 	int Normal_MinMax( vector<float> inFeat, vector<float> &NormFeat );

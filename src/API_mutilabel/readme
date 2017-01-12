@@ -2,4 +2,5 @@ v1.0.0:bing+kmeans+vgg-feat+svm
 v1.1.0:bing+fast rcnn
 v1.2.0:base on v1.0.0:bing+kmeans+googlenet-finetune
 
-v2.0.0:base on faster rcnn
+v2.0.0:base on rfcn/faster rcnn
+v2.1.0:base on pvanet

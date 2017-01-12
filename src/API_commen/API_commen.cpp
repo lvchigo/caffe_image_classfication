@@ -33,12 +33,11 @@
 #include <map>
 #include <algorithm>
 
-#include "API_commen.h"
-#include "TErrorCode.h"
+#include "API_commen/API_commen.h"
+#include "API_commen/TErrorCode.h"
 
 using namespace cv;
 using namespace std;
-
 
 /***********************************Init*************************************/
 /// construct function 
@@ -551,6 +550,48 @@ IplImage* API_COMMEN::ResizeImg( IplImage *img, float &ratio, int MaxLen )
 	rWidth = (((rWidth + 3) >> 2) << 2);	//width 4 char
 	rHeight = (int )img->height * ratio;
 	rHeight = (((rHeight + 3) >> 2) << 2);	//rHeight 4 char
+
+	IplImage *imgResize = cvCreateImage(cvSize(rWidth, rHeight), img->depth, img->nChannels);
+	cvResize( img, imgResize );
+
+	return imgResize;
+}
+
+IplImage* API_COMMEN::ResizeImg( IplImage *img, float &w_ratio, float &h_ratio, int MaxLen )
+{
+	int rWidth, rHeight, tmp, nRet = 0;
+	int stride = 32;
+	w_ratio = 1.0;
+	h_ratio = 1.0;
+
+	if ( MaxLen%stride != 0 )
+	{
+		printf("[API_COMMEN::ResizeImg]MaxLen%stride != 0!!MaxLen:%d,stride:%d\n",MaxLen,stride);
+		return NULL;
+	}
+
+	//Resize
+	if (img->width > img->height) {
+		w_ratio = MaxLen*1.0 / img->width;
+		tmp = (int )img->height * w_ratio;
+		tmp = (((tmp + 16) >> 5) << 5);
+		h_ratio = tmp*1.0 / img->height;
+
+		rWidth = MaxLen;
+		rHeight = tmp;
+	} 
+	else 
+	{	
+		h_ratio = MaxLen*1.0 / img->height;
+		tmp = (int )img->width * h_ratio;
+		tmp = (((tmp + 16) >> 5) << 5);
+		w_ratio = tmp*1.0 / img->width;
+
+		rWidth = tmp;
+		rHeight = MaxLen;
+	}
+
+	//printf("im_info:%d,%d,%d,%d,%.2f,%.2f\n",img->width,img->height,rWidth,rHeight,w_ratio,h_ratio);
 
 	IplImage *imgResize = cvCreateImage(cvSize(rWidth, rHeight), img->depth, img->nChannels);
 	cvResize( img, imgResize );

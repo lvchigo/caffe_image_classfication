@@ -26,7 +26,7 @@ using namespace std;
 
 //=================================================================================//
 static pthread_mutex_t g_mutex = PTHREAD_MUTEX_INITIALIZER;
-const int THREADCOUNT = 4;
+const int THREADCOUNT = 8;
 
 typedef struct tagThreadParam
 {
@@ -45,6 +45,7 @@ typedef struct tagAdsInfo
 }AdsInfo;
 
 vector< pair< long, string > > gImgInfo;
+vector< pair< string, string > > gImgInfo_string;
 vector< AdsInfo > gAdsInfo;
 
 //=================================================================================//
@@ -174,10 +175,11 @@ int DL_DownloadImg_Num( long startID, long ImgNum, char *savePath, long BinReSiz
 	return 0;
 }
 
-int DL_DownloadImg_Path( char *szQueryList,char *savePath, long BinReSizeImg )
+int DL_DownloadImg_Path( char *szQueryList,char *savePath, long BinReSizeImg, int BinOnlyUrl )
 {
 	/***********************************Init*************************************/
-	long i;
+	long i,nCount;
+	unsigned long long ImageID;
 	gImgInfo.clear();
 	
 	API_COMMEN api_commen;
@@ -188,6 +190,7 @@ int DL_DownloadImg_Path( char *szQueryList,char *savePath, long BinReSizeImg )
 	std::string line;
 	
 	/*****************************Process one by one*****************************/
+	nCount = 0;
 	while( getline(stream_reader, line) )
 	{
 		if( strlen(line.c_str()) == 0 )
@@ -195,20 +198,36 @@ int DL_DownloadImg_Path( char *szQueryList,char *savePath, long BinReSizeImg )
 		  	continue;
 		}
 	  	//cout<<line<<endl;
-		
-	    cell.clear() ;
-		api_commen.split( line, ",", cell );
-		//for(i=0;i<cell.size();i++)
-		//	printf("cell.size:%d,cell[%d]:%s\n", cell.size(), i, cell[i].c_str() );
 
-		if ( cell.size() == 2 )
+		if (BinOnlyUrl == 0)
 		{
-			gImgInfo.push_back( std::make_pair( atol(cell[0].c_str()), cell[1] ) );
+		    cell.clear() ;
+			api_commen.split( line, ",", cell );
+			//for(i=0;i<cell.size();i++)
+			//	printf("cell.size:%d,cell[%d]:%s\n", cell.size(), i, cell[i].c_str() );
+
+			if ( cell.size() == 2 )
+			{
+				gImgInfo.push_back( std::make_pair( atol(cell[0].c_str()), cell[1] ) );
+			}
+			else if ( cell.size() == 3 )
+				gImgInfo.push_back( std::make_pair( atol(cell[0].c_str()), cell[2] ) );
+			else
+				continue;	
 		}
-		else if ( cell.size() == 3 )
-			gImgInfo.push_back( std::make_pair( atol(cell[0].c_str()), cell[2] ) );
-		else
-			continue;		
+		else if (BinOnlyUrl == 1)
+		{
+			/************************getRandomID*****************************/
+			api_commen.getRandomID( ImageID );
+			gImgInfo.push_back( std::make_pair( ImageID, line ) );
+			
+			nCount++;
+			if( nCount%5000 == 0 )
+			{
+				printf("Loaded %ld img...\n",nCount);
+				sleep(1);
+			}
+		}
 	}
 	/*********************************close file*************************************/
 	stream_reader.close();
@@ -240,6 +259,168 @@ int DL_DownloadImg_Path( char *szQueryList,char *savePath, long BinReSizeImg )
 
 	return 0;
 }
+
+void *workThread_download_string (void *para)
+{
+	/*****************************Init*****************************/
+	char inputLabel[256];
+	char ImgHttpPath[256];
+	char szImgPath[256];
+	char rmImgPath[256];
+	char charImageID[1024];
+	string strImageID;
+	int j, svImg, nRet = 0;
+	long idx,nCount;
+	string ImageID;
+	/***********************************Init*************************************/
+	API_COMMEN api_commen;
+	API_WGET_INIM api_wget_inim;
+	string url;
+
+	ThreadParam *pParam = (ThreadParam*)para;
+	
+	/***********************************Start*************************************/
+	for (idx = pParam->para; idx < gImgInfo_string.size(); idx += pParam->nThreads) 
+	{
+		ImageID = gImgInfo_string[idx].first;
+		url = gImgInfo_string[idx].second;
+		if ( ( url == "null" ) || ( strlen(url.c_str()) == 0 ) )		//DL_DownloadImg_Num
+		{
+			continue;
+		}
+	  	cout<<url<<endl;
+		
+		/*****************************wget_image_file*****************************/
+		sprintf( szImgPath, "%s/%s.jpg", pParam->svPath.c_str(), ImageID.c_str() );
+		pthread_mutex_lock (&g_mutex);
+		api_wget_inim.wget_image_file_sys( url, string(szImgPath) );
+		pthread_mutex_unlock (&g_mutex);
+		//cout<<"its done."<<std::endl;
+
+		/*****************************cvLoadImage*****************************/
+		IplImage *img = cvLoadImage(szImgPath);
+		if(!img || (img->width<16) || (img->height<16) || img->nChannels != 3 || img->depth != IPL_DEPTH_8U) 
+		{	
+			cout<<"Can't open " << szImgPath << endl;
+			
+			//rm img file
+			sprintf(rmImgPath, "rm %s", szImgPath );
+			nRet = system(rmImgPath);
+
+			//Release
+			cvReleaseImage(&img);img = 0;
+			
+			continue;
+		}	
+
+		//save img data
+		IplImage *ImgResize = cvCreateImage(cvSize(255, 255), img->depth, img->nChannels);
+		cvResize( img, ImgResize );
+		pthread_mutex_lock (&g_mutex);
+		if ( pParam->BinReSizeImg == 1 )
+			cvSaveImage( szImgPath,ImgResize );
+		else
+			cvSaveImage( szImgPath,img );
+		pthread_mutex_unlock (&g_mutex);	
+		cvReleaseImage(&ImgResize);ImgResize = 0;
+
+		//Release
+		cvReleaseImage(&img);img = 0;
+
+	}
+
+	/*******************************clr img***************************************/
+	printf("thread %d Over!\n", pParam->para);
+	pthread_exit (0);
+}
+
+int DL_DownloadImg_Path_stringid( char *szQueryList,char *savePath, long BinReSizeImg, int BinOnlyUrl )
+{
+	/***********************************Init*************************************/
+	long i,nCount;
+	unsigned long long ImageID;
+	string strImageID;
+	gImgInfo_string.clear();
+	
+	API_COMMEN api_commen;
+	vector<string> cell ;
+	
+	/********************************Open Query List*****************************/
+	std::ifstream stream_reader( szQueryList );
+	std::string line;
+	
+	/*****************************Process one by one*****************************/
+	nCount = 0;
+	while( getline(stream_reader, line) )
+	{
+		if( strlen(line.c_str()) == 0 )
+		{
+		  	continue;
+		}
+	  	//cout<<line<<endl;
+
+		if (BinOnlyUrl == 0)
+		{
+		    cell.clear() ;
+			api_commen.split( line, ",", cell );
+			//for(i=0;i<cell.size();i++)
+			//	printf("cell.size:%d,cell[%d]:%s\n", cell.size(), i, cell[i].c_str() );
+
+			if ( cell.size() == 2 )
+			{
+				gImgInfo_string.push_back( std::make_pair( cell[0], cell[1] ) );
+			}
+			else if ( cell.size() == 3 )
+				gImgInfo_string.push_back( std::make_pair( cell[0], cell[2] ) );
+			else
+				continue;	
+		}
+		else if (BinOnlyUrl == 1)
+		{
+			/************************getRandomID*****************************/
+			api_commen.getRandomID( ImageID );
+			strImageID = ImageID;
+			gImgInfo_string.push_back( std::make_pair( strImageID, line ) );
+			
+			nCount++;
+			if( nCount%5000 == 0 )
+			{
+				printf("Loaded %ld img...\n",nCount);
+				sleep(1);
+			}
+		}
+	}
+	/*********************************close file*************************************/
+	stream_reader.close();
+	printf("load %d imgData...", gImgInfo_string.size() );
+
+	/*********************************MutiThread*************************************/	
+	{
+		pthread_t *pThread = new pthread_t[THREADCOUNT];
+		ThreadParam *pParam = new ThreadParam[THREADCOUNT];
+		
+		for(i=0; i<THREADCOUNT; ++i)
+		{
+			pParam[i].para = int(i);
+			pParam[i].nThreads = THREADCOUNT;
+			pParam[i].svPath = savePath;
+			pParam[i].BinReSizeImg = BinReSizeImg;
+
+			int rc = pthread_create(pThread+i, NULL, workThread_download_string,(void*)(pParam+i));
+		}
+
+		for(i=0; i<THREADCOUNT; ++i)
+		{
+			pthread_join(pThread[i], NULL);
+		}
+		sleep (1);
+		delete [] pThread;
+		delete [] pParam;
+	}
+
+	return 0;
+}
+
 
 int DL_DownloadImg_NoPath( char *szQueryList,char *savePath, long BinReSizeImg )
 {
@@ -656,8 +837,11 @@ int main(int argc, char* argv[])
 	char szKeyFiles[256],szSavePath[256];
 	API_COMMEN api_commen;
 
-	if (argc == 5 && strcmp(argv[1],"-downloadpath") == 0) {
-		ret = DL_DownloadImg_Path( argv[2], argv[3], atol(argv[4]) );
+	if (argc == 6 && strcmp(argv[1],"-downloadpath") == 0) {
+		ret = DL_DownloadImg_Path( argv[2], argv[3], atol(argv[4]), atol(argv[5]) );
+	}
+	if (argc == 6 && strcmp(argv[1],"-downloadpath_stringid") == 0) {
+		ret = DL_DownloadImg_Path_stringid( argv[2], argv[3], atol(argv[4]), atol(argv[5]) );
 	}
 	else if (argc == 5 && strcmp(argv[1],"-downloadnopath") == 0) {
 		ret = DL_DownloadImg_NoPath( argv[2], argv[3], atol(argv[4]) );
@@ -677,7 +861,8 @@ int main(int argc, char* argv[])
 	else
 	{
 		cout << "usage:\n" << endl;
-		cout << "\tDemo_downloadimg -downloadpath queryList.csv savePath BinReSizeImg\n" << endl;		
+		cout << "\tDemo_downloadimg -downloadpath queryList.csv savePath BinReSizeImg BinOnlyUrl\n" << endl;	
+		cout << "\tDemo_downloadimg -downloadpath_stringid queryList.csv savePath BinReSizeImg BinOnlyUrl\n" << endl;	
 		cout << "\tDemo_downloadimg -downloadnopath queryList.csv savePath BinReSizeImg\n" << endl;
 		cout << "\tDemo_downloadimg -downloadnum startID ImgNum savePath BinReSizeImg\n" << endl;	
 		cout << "\tDemo_downloadimg -downloadurl queryList.csv savePath BinReSizeImg\n" << endl;

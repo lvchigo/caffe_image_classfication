@@ -13,9 +13,9 @@
 #include <opencv/cxcore.h>
 #include <opencv/highgui.h>
 
-#include "API_commen.h"
-#include "API_data_augmentation.h"
-#include "API_xml.h"	//read xml
+#include "API_commen/API_commen.h"
+#include "API_data_augmentation/API_data_augmentation.h"
+#include "API_xml/API_xml.h"	//read xml
 
 using namespace cv;
 using namespace std; 

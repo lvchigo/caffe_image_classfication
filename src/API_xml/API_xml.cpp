@@ -33,10 +33,9 @@
 #include <map>
 #include <algorithm>
 
-#include "TErrorCode.h"
-
-#include "tinyxml2.hpp"	//read xml
-#include "API_xml.h"	//read xml
+#include "API_commen/TErrorCode.h"
+#include "API_xml/tinyxml2.hpp"	//read xml
+#include "API_xml/API_xml.h"	//read xml
 
 using namespace cv;
 using namespace std;

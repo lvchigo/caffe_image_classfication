@@ -9,6 +9,9 @@ SFLAG := -fPIC -shared
 ###### target and sources
 # sources
 
+SOURCES_DIR = ../src
+SOURCES_INC = -I$(SOURCES_DIR)
+
 CAFFE_DIR = ../src/API_caffe/v1.2.0
 CAFFE_INC = -I$(CAFFE_DIR) -I$(CAFFE_DIR)/include 
 CAFFE_SRC = $(CAFFE_DIR)/API_caffe_mutilabel.cpp 
@@ -37,10 +40,10 @@ LIBARAY += $(CAFFE_LIB)
 # flags
 CFLAGS =  -fopenmp  -DHAVE_JPEG -DHAVE_PNG
 CXXFLAGS = -fopenmp  -DHAVE_JPEG -DHAVE_PNG \
-	$(CAFFE_INC) $(COMMEN_INC) $(PLOG_INC) $(XML_INC) $(MUTILABEL_INC) $(INCLUDE) 
+	$(SOURCES_INC) $(CAFFE_INC) $(COMMEN_INC) $(PLOG_INC) $(XML_INC) $(MUTILABEL_INC) $(INCLUDE) 
 
 LDFLAGS  = -lm -lpthread -lopencv_core -lopencv_highgui -lopencv_imgproc -lopencv_ml -lopencv_imgcodecs
-LDFLAGS  += -lcublas_device -lcublas -lcudadevrt -lcudart  -lcufft -lcufftw -lculibos -lcurand -lcusparse -lnppc -lnppi -lnpps 
+LDFLAGS  += -lcublas_device -lcublas -lcudadevrt -lcudart  -lcufft -lcufftw -lculibos -lcurand -lcusparse -lnppc -lnppi -lnpps -lboost_system
 LDFLAGS  += -ldl -lrt -ljpeg -lpng  -lz -lcurl -lstdc++ -lglog -lcaffe 
 LDFLAGS  += -lopenblas
 
@@ -71,18 +74,18 @@ all: lib Demo_mutilabel
 #deps: $(addprefix $(OBJSPATH),$(DEPS))
 Demo_mutilabel:$(BIN) $(LIB) $(OBJECTS) Demo_mutilabel.cpp
 	@echo ----------------------------------------------
-	$(CXX) $(CXXFLAGS) Demo_mutilabel.cpp  -o $(BIN)/Demo_mutilabel -lmutilabel_2_0_0 $(LIBARAY) $(LDFLAGS) 
+	$(CXX) $(CXXFLAGS) Demo_mutilabel.cpp  -o $(BIN)/Demo_mutilabel -lmutilabel_2_2_0 $(LIBARAY) $(LDFLAGS) 
 	@echo ----------------------------------------------
 
 lib: $(LIB) $(OBJECTS)
 	@echo ----------------------------------------------
-	$(CXX) $(CXXFLAGS) -shared -o -fPIC -o $(LIB)/libmutilabel_2_0_0.so $(OBJECTS) $(LIBARAY) $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) -shared -o -fPIC -o $(LIB)/libmutilabel_2_2_0.so $(OBJECTS) $(LIBARAY) $(LDFLAGS)
 	@echo ----------------------------------------------
 
 clean:
 	rm -f $(OBJECTS)
 	rm -f $(TARGET)
-	rm $(LIB)/libmutilabel_2_0_0.so
+	rm $(LIB)/libmutilabel_2_2_0.so
 	rm -f *.o 
 	rm $(BIN)/Demo_mutilabel
 

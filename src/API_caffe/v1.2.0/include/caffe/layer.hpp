@@ -9,7 +9,7 @@
 #include "caffe/common.hpp"
 #include "caffe/layer_factory.hpp"
 #include "caffe/proto/caffe.pb.h"
-#include "caffe/util/device_alternate.hpp"
+#include "caffe/util/math_functions.hpp"
 
 /**
  Forward declare boost::thread instead of including boost/thread.hpp
@@ -317,6 +317,16 @@ class Layer {
   }
 
   inline Phase phase() { return phase_; }
+
+  /**
+   * @brief set phase
+   *        enable train and test with one network, for saving memory
+  */
+  virtual inline void set_phase(Phase phase) {
+    phase_ = phase;
+  }
+
+
 
  protected:
   /** The protobuf that stores the layer parameters */
